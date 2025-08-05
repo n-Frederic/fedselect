@@ -51,7 +51,8 @@ def noniid(
     ]
 
     targets = None
-    targets = [elem[1].item() for elem in dataset]
+    targets = [elem[1] for elem in dataset]
+    # targets = [elem[1].item() for elem in dataset]
 
     # dictionary of indices in the dataset for each label
     idxs_dict = {}
