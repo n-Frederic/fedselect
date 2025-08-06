@@ -3,7 +3,7 @@ import argparse
 
 def lth_args_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--lr", default=0.05, type=float, help="Learning rate")
+    parser.add_argument("--lr", default=0.001, type=float, help="Learning rate")
     parser.add_argument("--batch_size", default=60, type=int)
     parser.add_argument("--lth_epoch_iters", default=3, type=int)
     parser.add_argument(
