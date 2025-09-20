@@ -142,7 +142,8 @@ def fedselect_algorithm(
     server_weights = OrderedDict()
     lth_iters = args.lth_epoch_iters
     prune_rate = args.prune_percent / 100
-    prune_target = args.prune_target / 100
+    grow_target = args.grow_target / 100
+    shrink_target = args.shrink_target / 100
     lottery_ticket_convergence = []
     # Begin FL
     for round_num in range(com_rounds):
@@ -172,15 +173,23 @@ def fedselect_algorithm(
                 )
             client_state_dicts[i] = copy.deepcopy(client_model.state_dict())
             client_masks[i] = copy.deepcopy(client_mask)
-
-            if round_num % lth_iters == 0 and round_num != 0:
+            
+            if round_num % lth_iters == 0 and round_num != 0:                
                 client_mask = delta_update(
                     prune_rate,
                     client_state_dicts[i],
                     client_state_dict_prev[i],
                     client_masks_prev[i],
-                    bound=prune_target,
+                    bound=grow_target,# a%
                     invert=True,
+                )
+                client_mask = delta_update(
+                    prune_rate,
+                    client_state_dicts[i],
+                    client_state_dict_prev[i],
+                    client_mask,
+                    bound=1-shrink_target, # b%
+                    invert=False,
                 )
                 client_state_dict_prev[i] = copy.deepcopy(client_state_dicts[i])
                 client_masks_prev[i] = copy.deepcopy(client_mask)

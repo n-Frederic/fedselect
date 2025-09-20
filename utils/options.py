@@ -3,7 +3,7 @@ import argparse
 
 def lth_args_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--lr", default=0.05, type=float, help="Learning rate")
+    parser.add_argument("--lr", default=0.002, type=float, help="Learning rate")
     parser.add_argument("--batch_size", default=60, type=int)
     parser.add_argument("--lth_epoch_iters", default=3, type=int)
     parser.add_argument(
@@ -24,7 +24,8 @@ def lth_args_parser():
     parser.add_argument(
         "--prune_percent", default=25, type=float, help="Pruning percent"
     )
-    parser.add_argument("--prune_target", default=80, type=int, help="Pruning target")
+    parser.add_argument("--grow_target", default=80, type=int, help="Pruning target")
+    parser.add_argument("--shrink_target", default=60, type=int, help="Pruning target")
     parser.add_argument(
         "--com_rounds", type=int, default=4, help="rounds of fedavg training"
     )

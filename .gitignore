@@ -1,0 +1,6 @@
+/data
+/.idea
+/__pycache__
+/pflopt
+/utils/__pycache__
+*.txt

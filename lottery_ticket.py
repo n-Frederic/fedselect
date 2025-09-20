@@ -10,6 +10,25 @@ import types
 from collections import OrderedDict
 from typing import List, Tuple, Dict, OrderedDict, Optional, Union
 
+def calculate_total_sparsity_percent(mask: OrderedDict) -> float:
+    """Calculate the total percentage of personalized parameters (1s) in the mask.
+
+    Args:
+        mask: OrderedDict containing binary masks for model parameters
+
+    Returns:
+        float: Percentage of personalized parameters (1s)
+    """
+    total_elements = 0
+    personalized_elements = 0 # Count elements that are 1
+    for m in mask.values():
+        total_elements += m.numel()
+        personalized_elements += torch.count_nonzero(m).item() # Count 1s
+    
+    if total_elements == 0:
+        return 0.0
+    return 100 * (personalized_elements / total_elements) # 返回个性化参数的百分比
+
 
 def eval_per_layer_sparsity(mask: OrderedDict) -> List[Tuple[str, str, str, float]]:
     """Calculate sparsity statistics for each weight layer in the mask.
@@ -97,15 +116,13 @@ def print_nonzeros(
     return 100 * (total - nonzero) / total
 
 
-def print_lth_stats(mask: OrderedDict, invert: bool = False) -> None:
+def print_lth_stats(mask: OrderedDict, invert: bool = False) -> None: # 保持签名不变，以防其他地方调用
     """Print lottery ticket hypothesis statistics about mask sparsity.
-
-    Args:
-        mask: OrderedDict containing binary masks
-        invert: Whether to invert the sparsity calculation
+    This version is modified to ALWAYS print the percentage of PERSONALIZED parameters (1s).
     """
-    current_prune = print_nonzeros(mask, invert=invert)
-    print(f"Mask Sparsity: {current_prune:.2f}%")
+    # 调用 print_nonzeros 时，强制 invert=True 来计算个性化参数的比例
+    personalized_percentage = print_nonzeros(mask, invert=True)
+    print(f"Personalized Percentage: {personalized_percentage:.2f}%")
 
 
 def _violates_bound(
