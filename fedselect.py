@@ -14,16 +14,19 @@ from pflopt.optimizers import MaskLocalAltSGD, local_alt
 from lottery_ticket import init_mask_zeros, delta_update
 from broadcast import (
     broadcast_server_to_client_initialization,
-    div_server_weights,
-    add_masks,
-    add_server_weights,
+    # The following functions are replaced by the attention aggregator
+    # div_server_weights,
+    # add_masks,
+    # add_server_weights,
 )
+# Import the new attention aggregator
+from attention_aggregator import attention_based_aggregation
 import random
 from torchvision.models import resnet18
 
 
 def evaluate(
-    model: nn.Module, ldr_test: torch.utils.data.DataLoader, args: Any
+        model: nn.Module, ldr_test: torch.utils.data.DataLoader, args: Any
 ) -> float:
     """Evaluate model accuracy on test data loader.
 
@@ -50,13 +53,13 @@ def evaluate(
 
 
 def train_personalized(
-    model: nn.Module,
-    ldr_train: torch.utils.data.DataLoader,
-    mask: OrderedDict,
-    args: Any,
-    initialization: Optional[OrderedDict] = None,
-    verbose: bool = False,
-    eval: bool = True,
+        model: nn.Module,
+        ldr_train: torch.utils.data.DataLoader,
+        mask: OrderedDict,
+        args: Any,
+        initialization: Optional[OrderedDict] = None,
+        verbose: bool = False,
+        eval: bool = True,
 ) -> Tuple[nn.Module, float]:
     """Train model with personalized local alternating optimization.
 
@@ -99,14 +102,14 @@ def train_personalized(
 
 
 def fedselect_algorithm(
-    model: nn.Module,
-    args: Any,
-    dataset_train: torch.utils.data.Dataset,
-    dataset_test: torch.utils.data.Dataset,
-    dict_users_train: Dict[int, np.ndarray],
-    dict_users_test: Dict[int, np.ndarray],
-    labels: np.ndarray,
-    idxs_users: List[int],
+        model: nn.Module,
+        args: Any,
+        dataset_train: torch.utils.data.Dataset,
+        dataset_test: torch.utils.data.Dataset,
+        dict_users_train: Dict[int, np.ndarray],
+        dict_users_test: Dict[int, np.ndarray],
+        labels: np.ndarray,
+        idxs_users: List[int],
 ) -> Dict[str, Any]:
     """Main FedSelect federated learning algorithm.
 
@@ -138,15 +141,22 @@ def fedselect_algorithm(
     client_state_dict_prev = {i: copy.deepcopy(initial_state_dict) for i in idxs_users}
     client_masks = {i: None for i in idxs_users}
     client_masks_prev = {i: init_mask_zeros(model) for i in idxs_users}
-    server_accumulate_mask = OrderedDict()
-    server_weights = OrderedDict()
     lth_iters = args.lth_epoch_iters
     prune_rate = args.prune_percent / 100
     prune_target = args.prune_target / 100
     lottery_ticket_convergence = []
+
     # Begin FL
     for round_num in range(com_rounds):
         round_loss = 0
+
+        # Lists to collect client updates for this round
+        round_client_weights_list = []
+        round_client_masks_list = []
+        # Save the global model state before this round begins for attention calculation
+        # Since all clients share the same global params before training, we can pick any
+        current_global_weights = copy.deepcopy(client_state_dicts[idxs_users[0]])
+
         for i in idxs_users:
             # initialize model
             model.load_state_dict(client_state_dicts[i])
@@ -164,12 +174,12 @@ def fedselect_algorithm(
             # 0s are global parameters, 1s are local parameters
             client_model, loss = train_personalized(model, ldr_train, client_mask, args)
             round_loss += loss
-            # Send u_i update to server
+
+            # Instead of accumulating on the server, collect the results
             if round_num < com_rounds - 1:
-                server_accumulate_mask = add_masks(server_accumulate_mask, client_mask)
-                server_weights = add_server_weights(
-                    server_weights, client_model.state_dict(), client_mask
-                )
+                round_client_weights_list.append(copy.deepcopy(client_model.state_dict()))
+                round_client_masks_list.append(copy.deepcopy(client_mask))
+
             client_state_dicts[i] = copy.deepcopy(client_model.state_dict())
             client_masks[i] = copy.deepcopy(client_mask)
 
@@ -184,6 +194,7 @@ def fedselect_algorithm(
                 )
                 client_state_dict_prev[i] = copy.deepcopy(client_state_dicts[i])
                 client_masks_prev[i] = copy.deepcopy(client_mask)
+
         round_loss /= len(idxs_users)
         cross_client_acc = cross_client_eval(
             model,
@@ -201,15 +212,18 @@ def fedselect_algorithm(
         print("Client Accs: ", accs, " | Mean: ", accs.mean())
 
         if round_num < com_rounds - 1:
-            # Server averages u_i
-            server_weights = div_server_weights(server_weights, server_accumulate_mask)
-            # Server broadcasts non lottery ticket parameters u_i to every device
+            # Server aggregates using the new attention mechanism
+            server_weights = attention_based_aggregation(
+                server_weights=current_global_weights,
+                client_weights_list=round_client_weights_list,
+                client_masks_list=round_client_masks_list
+            )
+
+            # Server broadcasts the new attention-weighted global parameters to every device
             for i in idxs_users:
                 client_state_dicts[i] = broadcast_server_to_client_initialization(
                     server_weights, client_masks[i], client_state_dicts[i]
                 )
-            server_accumulate_mask = OrderedDict()
-            server_weights = OrderedDict()
 
     cross_client_acc = cross_client_eval(
         model,
@@ -235,14 +249,14 @@ def fedselect_algorithm(
 
 
 def cross_client_eval(
-    model: nn.Module,
-    client_state_dicts: Dict[int, OrderedDict],
-    dataset_train: torch.utils.data.Dataset,
-    dataset_test: torch.utils.data.Dataset,
-    dict_users_train: Dict[int, np.ndarray],
-    dict_users_test: Dict[int, np.ndarray],
-    args: Any,
-    no_cross: bool = True,
+        model: nn.Module,
+        client_state_dicts: Dict[int, OrderedDict],
+        dataset_train: torch.utils.data.Dataset,
+        dataset_test: torch.utils.data.Dataset,
+        dict_users_train: Dict[int, np.ndarray],
+        dict_users_test: Dict[int, np.ndarray],
+        args: Any,
+        no_cross: bool = True,
 ) -> torch.Tensor:
     """Evaluate models across clients.
 
