@@ -1,0 +1,7 @@
+__pycache__/broadcast.cpython-313.pyc
+__pycache__/lottery_ticket.cpython-313.pyc
+data/cifar10/cifar-10-batches-py/batches.meta
+/data
+/utils/__pycache__
+/.idea
+/pflopt/__pycache__

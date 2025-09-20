@@ -1,4 +1,4 @@
-# Importing Libraries
+# 导入库
 import copy
 import numpy as np
 from tqdm import tqdm
@@ -12,13 +12,13 @@ from typing import List, Tuple, Dict, OrderedDict, Optional, Union
 
 
 def eval_per_layer_sparsity(mask: OrderedDict) -> List[Tuple[str, str, str, float]]:
-    """Calculate sparsity statistics for each weight layer in the mask.
+    """计算掩码中每个权重层的稀疏度信息。
 
-    Args:
-        mask: OrderedDict containing binary masks for model parameters
+    参数:
+        mask: 包含模型参数二进制掩码的 OrderedDict
 
-    Returns:
-        List of tuples containing (num ones, num zeros, layer name, sparsity) for each weight layer
+    返回:
+        每个权重层的统计信息列表，每个元素为 (1的数量, 0的数量, 层名, 稀疏度)
     """
     return [
         (
@@ -41,14 +41,14 @@ def eval_per_layer_sparsity(mask: OrderedDict) -> List[Tuple[str, str, str, floa
 def eval_layer_sparsity(
     mask: OrderedDict, layer_name: str
 ) -> Tuple[str, str, str, float]:
-    """Calculate sparsity statistics for a specific layer in the mask.
+    """计算掩码中某个指定层的稀疏度信息。
 
-    Args:
-        mask: OrderedDict containing binary masks for model parameters
-        layer_name: Name of layer to analyze
+    参数:
+        mask: 包含模型参数二进制掩码的 OrderedDict
+        layer_name: 要分析的层名
 
-    Returns:
-        Tuple containing (num ones, num zeros, layer name, sparsity) for specified layer
+    返回:
+        (1的数量, 0的数量, 层名, 稀疏度) 的元组
     """
     return (
         f"1: {torch.count_nonzero(mask[layer_name])}",
@@ -67,15 +67,15 @@ def eval_layer_sparsity(
 def print_nonzeros(
     model: OrderedDict, verbose: bool = False, invert: bool = False
 ) -> float:
-    """Print statistics about non-zero parameters in model.
+    """打印模型中非零参数的统计信息。
 
-    Args:
-        model: OrderedDict containing model parameters
-        verbose: Whether to print detailed statistics
-        invert: Whether to count zeros instead of non-zeros
+    参数:
+        model: 包含模型参数的 OrderedDict
+        verbose: 是否打印详细的每层统计信息
+        invert: 是否统计 0 的数量而不是非零数量
 
-    Returns:
-        Percentage of pruned parameters
+    返回:
+        被剪枝参数的百分比
     """
     nonzero = total = 0
     for name, p in model.items():
@@ -98,11 +98,11 @@ def print_nonzeros(
 
 
 def print_lth_stats(mask: OrderedDict, invert: bool = False) -> None:
-    """Print lottery ticket hypothesis statistics about mask sparsity.
+    """打印 Lottery Ticket Hypothesis (LTH) 掩码的稀疏度信息。
 
-    Args:
-        mask: OrderedDict containing binary masks
-        invert: Whether to invert the sparsity calculation
+    参数:
+        mask: 包含二进制掩码的 OrderedDict
+        invert: 是否反转稀疏度计算
     """
     current_prune = print_nonzeros(mask, invert=invert)
     print(f"Mask Sparsity: {current_prune:.2f}%")
@@ -111,15 +111,15 @@ def print_lth_stats(mask: OrderedDict, invert: bool = False) -> None:
 def _violates_bound(
     mask: torch.Tensor, bound: Optional[float] = None, invert: bool = False
 ) -> bool:
-    """Check if mask sparsity violates specified bound.
+    """判断掩码稀疏度是否超过指定的上限。
 
-    Args:
-        mask: Binary mask tensor
-        bound: Maximum allowed sparsity
-        invert: Whether to invert the sparsity calculation
+    参数:
+        mask: 二进制掩码张量
+        bound: 最大允许稀疏度
+        invert: 是否反转稀疏度计算
 
-    Returns:
-        True if bound is violated, False otherwise
+    返回:
+        如果超过上限返回 True，否则返回 False
     """
     if invert:
         return (
@@ -134,13 +134,13 @@ def _violates_bound(
 
 
 def init_mask(model: nn.Module) -> OrderedDict:
-    """Initialize binary mask of ones for model parameters.
+    """为模型参数初始化全 1 的二进制掩码。
 
-    Args:
-        model: Neural network model
+    参数:
+        model: 神经网络模型
 
-    Returns:
-        OrderedDict containing binary masks initialized to ones
+    返回:
+        包含全 1 掩码的 OrderedDict
     """
     mask = OrderedDict()
     for name, param in model.named_parameters():
@@ -149,13 +149,13 @@ def init_mask(model: nn.Module) -> OrderedDict:
 
 
 def init_mask_zeros(model: nn.Module) -> OrderedDict:
-    """Initialize binary mask of zeros for model parameters.
+    """为模型参数初始化全 0 的二进制掩码。
 
-    Args:
-        model: Neural network model
+    参数:
+        model: 神经网络模型
 
-    Returns:
-        OrderedDict containing binary masks initialized to zeros
+    返回:
+        包含全 0 掩码的 OrderedDict
     """
     mask = OrderedDict()
     for name, param in model.named_parameters():
@@ -171,21 +171,22 @@ def get_mask_from_delta(
     bound: float = 0.80,
     invert: bool = True,
 ) -> OrderedDict:
-    """Generate new mask based on parameter changes between states.
+    """基于模型两次状态之间的权重变化生成新的掩码。
 
-    Args:
-        prune_percent: Percentage of parameters to prune
-        current_state_dict: Current model state
-        prev_state_dict: Previous model state
-        current_mask: Current binary mask
-        bound: Maximum allowed sparsity
-        invert: Whether to invert the pruning logic
+    参数:
+        prune_percent: 要剪枝的比例
+        current_state_dict: 当前模型状态
+        prev_state_dict: 上一次的模型状态
+        current_mask: 当前二进制掩码
+        bound: 最大允许稀疏度
+        invert: 是否反转剪枝逻辑
 
-    Returns:
-        Updated binary mask based on parameter changes
+    返回:
+        根据权重变化更新后的二进制掩码
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     return_mask = copy.deepcopy(current_mask)
+    delta_tensor_dict = {}
     for name, param in current_state_dict.items():
         if "weight" in name:
             if _violates_bound(current_mask[name], bound=bound, invert=invert):
@@ -193,6 +194,7 @@ def get_mask_from_delta(
             tensor = param.data.cpu().numpy()
             compare_tensor = prev_state_dict[name].cpu().numpy()
             delta_tensor = np.abs(tensor - compare_tensor)
+            delta_tensor_dict[name] = torch.from_numpy(delta_tensor).to(device)
 
             delta_percentile_tensor = (
                 delta_tensor[current_mask[name].cpu().numpy() == 1]
@@ -204,7 +206,7 @@ def get_mask_from_delta(
                 cutoff_index = np.round(prune_percent * sorted_weights.size).astype(int)
                 cutoff = sorted_weights[cutoff_index]
 
-                # Convert Tensors to numpy and calculate
+                # 将张量转换为 numpy 进行计算
                 new_mask = np.where(
                     abs(delta_tensor) <= cutoff, 0, return_mask[name].cpu().numpy()
                 )
@@ -215,14 +217,26 @@ def get_mask_from_delta(
                 ).astype(int)
                 cutoff = sorted_weights[cutoff_index]
 
-                # Convert Tensors to numpy and calculate
+                # 设置衰减系数，每轮随机遗忘一些特色参数的掩码
+                # retain_prob = 0.9
+                # old_mask = return_mask[name].cpu()
+                # R = (torch.rand_like(old_mask.float()) < retain_prob).int()
+                # decayed_prev_mask = old_mask * R
+                #
+                # new_mask_tensor = torch.from_numpy(new_mask).to(device)
+                #
+                # final_mask = torch.max(decayed_prev_mask, new_mask_tensor)
+                # return_mask[name] = final_mask
+
+                # 将张量转换为 numpy 进行计算
                 new_mask = np.where(
                     abs(delta_tensor) >= cutoff, 1, return_mask[name].cpu().numpy()
                 )
                 return_mask[name] = torch.from_numpy(new_mask).to(device)
+
     # print(eval_per_layer_sparsity(return_mask))
     print(eval_layer_sparsity(return_mask, "fc.weight"))
-    return return_mask
+    return return_mask, delta_tensor_dict
 
 
 def delta_update(
@@ -233,20 +247,20 @@ def delta_update(
     bound: float = 0.80,
     invert: bool = False,
 ) -> OrderedDict:
-    """Update mask based on parameter changes between states.
+    """基于权重变化更新掩码。
 
-    Args:
-        prune_percent: Percentage of parameters to prune
-        current_state_dict: Current model state
-        prev_state_dict: Previous model state
-        current_mask: Current binary mask
-        bound: Maximum allowed sparsity
-        invert: Whether to invert the pruning logic
+    参数:
+        prune_percent: 要剪枝的比例
+        current_state_dict: 当前模型状态
+        prev_state_dict: 上一次的模型状态
+        current_mask: 当前二进制掩码
+        bound: 最大允许稀疏度
+        invert: 是否反转剪枝逻辑
 
-    Returns:
-        Updated binary mask
+    返回:
+        更新后的二进制掩码
     """
-    mask = get_mask_from_delta(
+    mask, delta_tensor_dict = get_mask_from_delta(
         prune_percent,
         current_state_dict,
         prev_state_dict,
@@ -254,5 +268,5 @@ def delta_update(
         bound=bound,
         invert=invert,
     )
-    print_lth_stats(mask, invert=invert)
-    return mask
+    # print_lth_stats(mask, invert=invert)
+    return mask, delta_tensor_dict

@@ -13,6 +13,7 @@ from utils.train_utils import prepare_dataloaders, get_data
 from pflopt.optimizers import MaskLocalAltSGD, local_alt
 from lottery_ticket import init_mask_zeros, delta_update
 from broadcast import (
+    FusionModule,
     broadcast_server_to_client_initialization,
     div_server_weights,
     add_masks,
@@ -144,6 +145,8 @@ def fedselect_algorithm(
     prune_rate = args.prune_percent / 100
     prune_target = args.prune_target / 100
     lottery_ticket_convergence = []
+    client_delta_tensors = {i: None for i in idxs_users}
+
     # Begin FL
     for round_num in range(com_rounds):
         round_loss = 0
@@ -172,9 +175,11 @@ def fedselect_algorithm(
                 )
             client_state_dicts[i] = copy.deepcopy(client_model.state_dict())
             client_masks[i] = copy.deepcopy(client_mask)
+            # print(f"round_num is {round_num}")
 
             if round_num % lth_iters == 0 and round_num != 0:
-                client_mask = delta_update(
+                # print(">>>> get here!")
+                client_mask, delta_tensor_dict = delta_update(
                     prune_rate,
                     client_state_dicts[i],
                     client_state_dict_prev[i],
@@ -184,6 +189,7 @@ def fedselect_algorithm(
                 )
                 client_state_dict_prev[i] = copy.deepcopy(client_state_dicts[i])
                 client_masks_prev[i] = copy.deepcopy(client_mask)
+                client_delta_tensors[i] = copy.deepcopy(delta_tensor_dict)
         round_loss /= len(idxs_users)
         cross_client_acc = cross_client_eval(
             model,
@@ -204,9 +210,11 @@ def fedselect_algorithm(
             # Server averages u_i
             server_weights = div_server_weights(server_weights, server_accumulate_mask)
             # Server broadcasts non lottery ticket parameters u_i to every device
+            print(f"round_num is {round_num}")
             for i in idxs_users:
+                fushion_module = FusionModule(client_state_dicts[i],client_delta_tensors[i])
                 client_state_dicts[i] = broadcast_server_to_client_initialization(
-                    server_weights, client_masks[i], client_state_dicts[i]
+                    server_weights, client_masks[i], client_state_dicts[i], client_delta_tensors[i], fusion_module=fushion_module
                 )
             server_accumulate_mask = OrderedDict()
             server_weights = OrderedDict()

@@ -3,7 +3,8 @@ import argparse
 
 def lth_args_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--lr", default=0.05, type=float, help="Learning rate")
+    # parser.add_argument("--lr", default=0.05, type=float, help="Learning rate")
+    parser.add_argument("--lr", default=0.001, type=float, help="Learning rate")
     parser.add_argument("--batch_size", default=60, type=int)
     parser.add_argument("--lth_epoch_iters", default=3, type=int)
     parser.add_argument(
@@ -26,7 +27,8 @@ def lth_args_parser():
     )
     parser.add_argument("--prune_target", default=80, type=int, help="Pruning target")
     parser.add_argument(
-        "--com_rounds", type=int, default=4, help="rounds of fedavg training"
+        # "--com_rounds", type=int, default=4, help="rounds of fedavg training"
+        "--com_rounds", type=int, default=8, help="rounds of fedavg training"
     )
     parser.add_argument(
         "--la_epochs",
@@ -41,7 +43,9 @@ def lth_args_parser():
     )
     parser.add_argument("--local_bs", type=int, default=32, help="local batch size: B")
     parser.add_argument(
+        # "--frac", type=float, default=0.1, help="the fraction of clients: C"
         "--frac", type=float, default=0.1, help="the fraction of clients: C"
+
     )
     parser.add_argument("--num_classes", type=int, default=10, help="number of classes")
     parser.add_argument("--model", type=str, default="mlp", help="model name")
