@@ -140,9 +140,6 @@ def fedselect_algorithm(
     client_state_dict_prev = {i: copy.deepcopy(initial_state_dict) for i in idxs_users}
     client_masks = {i: None for i in idxs_users}
     client_masks_prev = {i: init_mask_zeros(model) for i in idxs_users}
-    # Lists to collect client updates for this round
-    round_client_weights_list = []
-    round_client_masks_list = []
     # Save the global model state before this round begins for attention calculation
     current_global_weights = copy.deepcopy(client_state_dicts[idxs_users[0]])
     #      同时，还保存了本轮开始前的全局模型
@@ -155,6 +152,10 @@ def fedselect_algorithm(
     # Begin FL
     for round_num in range(com_rounds):
         round_loss = 0
+        # Lists to collect client updates for this round
+        round_client_weights_list = []
+        round_client_masks_list = []
+        current_global_weights = copy.deepcopy(client_state_dicts[idxs_users[0]])
         for i in idxs_users:
             # initialize model
             model.load_state_dict(client_state_dicts[i])
