@@ -22,10 +22,10 @@ def lth_args_parser():
         type=str,
     )
     parser.add_argument(
-        "--prune_percent", default=25, type=float, help="Pruning percent"
+        "--prune_percent", default=50, type=float, help="Pruning percent"
     )
     parser.add_argument("--grow_target", default=80, type=int, help="Pruning target")
-    parser.add_argument("--shrink_target", default=60, type=int, help="Pruning target")
+    parser.add_argument("--shrink_target", default=20, type=int, help="Pruning target")
     parser.add_argument(
         "--com_rounds", type=int, default=4, help="rounds of fedavg training"
     )
