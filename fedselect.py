@@ -140,20 +140,6 @@ def fedselect_algorithm(
     client_state_dict_prev = {i: copy.deepcopy(initial_state_dict) for i in idxs_users}
     client_masks = {i: None for i in idxs_users}
     client_masks_prev = {i: init_mask_zeros(model) for i in idxs_users}
-<<<<<<< Updated upstream
-    # Save the global model state before this round begins for attention calculation
-    current_global_weights = copy.deepcopy(client_state_dicts[idxs_users[0]])
-    #      同时，还保存了本轮开始前的全局模型
-    # `current_global_weights`，这很可能是为了计算注意力分数时使用（例如，比较客户端更新与全局模型的差异）。
-=======
-    # Lists to collect client updates for this round
-    round_client_weights_list = []
-    round_client_masks_list = []
-    # Save the global model state before this round begins for attention calculation
-    current_global_weights = copy.deepcopy(client_state_dicts[idxs_users[0]])
-    #      同时，还保存了本轮开始前的全局模型
-    #`current_global_weights`，这很可能是为了计算注意力分数时使用（例如，比较客户端更新与全局模型的差异）。
->>>>>>> Stashed changes
     lth_iters = args.lth_epoch_iters
     prune_rate = args.prune_percent / 100
     grow_target = args.grow_target / 100
@@ -165,7 +151,10 @@ def fedselect_algorithm(
         # Lists to collect client updates for this round
         round_client_weights_list = []
         round_client_masks_list = []
+        # Save the global model state before this round begins for attention calculation
         current_global_weights = copy.deepcopy(client_state_dicts[idxs_users[0]])
+        #      同时，还保存了本轮开始前的全局模型
+        #`current_global_weights`，这很可能是为了计算注意力分数时使用（例如，比较客户端更新与全局模型的差异）。
         for i in idxs_users:
             # initialize model
             model.load_state_dict(client_state_dicts[i])
