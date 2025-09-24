@@ -5,3 +5,4 @@ data/cifar10/cifar-10-batches-py/batches.meta
 /utils/__pycache__
 /.idea
 /pflopt/__pycache__
+/__pycache__
