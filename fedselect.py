@@ -135,10 +135,6 @@ def fedselect_algorithm(
     # initialize model
     initial_state_dict = copy.deepcopy(model.state_dict())
     com_rounds = args.com_rounds
-
-    # +++ 新增: 显式初始化一个服务器状态字典，用于跟踪全局模型的演进
-    server_state_dict = copy.deepcopy(initial_state_dict)
-
     # initialize server
     client_accuracies = [{i: 0 for i in idxs_users} for _ in range(com_rounds)]
     client_state_dicts = {i: copy.deepcopy(initial_state_dict) for i in idxs_users}
@@ -157,6 +153,10 @@ def fedselect_algorithm(
         # Lists to collect client updates for this round
         round_client_weights_list = []
         round_client_masks_list = []
+
+        # Save the global model state before this round begins for attention calculation
+        # Since all clients share the same global params before training, we can pick any
+        current_global_weights = copy.deepcopy(client_state_dicts[idxs_users[0]])
 
         for i in idxs_users:
             # initialize model
@@ -214,19 +214,16 @@ def fedselect_algorithm(
 
         if round_num < com_rounds - 1:
             # Server aggregates using the new attention mechanism
-            # *** 修改: 将聚合结果直接赋值给 server_state_dict，完成全局模型的更新
-            # *** 同时，将当前的 server_state_dict 作为聚合的基准传入
-            server_state_dict = attention_based_aggregation(
-                server_weights=server_state_dict,  # <--- 使用当前的服务器状态
+            server_weights = attention_based_aggregation(
+                server_weights=current_global_weights,
                 client_weights_list=round_client_weights_list,
                 client_masks_list=round_client_masks_list
             )
 
             # Server broadcasts the new attention-weighted global parameters to every device
             for i in idxs_users:
-                # *** 修改: 确保广播的是我们维护的 server_state_dict
                 client_state_dicts[i] = broadcast_server_to_client_initialization(
-                    server_state_dict, client_masks[i], client_state_dicts[i]
+                    server_weights, client_masks[i], client_state_dicts[i]
                 )
 
     cross_client_acc = cross_client_eval(
