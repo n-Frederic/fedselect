@@ -53,6 +53,11 @@ def attention_based_aggregation(
         score = F.cosine_similarity(server_global_flat.unsqueeze(0), client_global_flat.unsqueeze(0))
         attention_scores.append(score)
 
+    # ---> 新增的打印语句在这里 <---
+    # 打印原始的、未经Softmax处理的余弦相似度分数
+    raw_scores_list = [score.item() for score in attention_scores]
+    print(f"原始余弦相似度分数: {raw_scores_list}")
+
     # 使用Softmax归一化分数，得到最终的注意力权重
     attention_scores_tensor = torch.tensor(attention_scores)
     attention_weights = F.softmax(attention_scores_tensor, dim=0)
