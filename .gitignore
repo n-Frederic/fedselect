@@ -9,3 +9,6 @@
 
 .idea/
 data/
+/__pycache__
+/pflopt
+/utils
