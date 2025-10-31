@@ -7,11 +7,11 @@ from typing import Dict, List, Tuple, Any
 
 
 class DatasetSplit(torch.utils.data.Dataset):
-    """Custom Dataset class that returns a subset of another dataset based on indices.
+    """自定义 Dataset 类，用于根据给定索引返回原始数据集的一个子集。
 
-    Args:
-        dataset: The base dataset to sample from
-        idxs: Indices to use for sampling from the base dataset
+    参数:
+        dataset: 原始基础数据集
+        idxs: 要从原始数据集中采样的索引列表
     """
 
     def __init__(self, dataset: torch.utils.data.Dataset, idxs: List[int]) -> None:
@@ -62,17 +62,17 @@ trans_cifar100_val = transforms.Compose(
 def get_data(
     args: Any,
 ) -> Tuple[torch.utils.data.Dataset, torch.utils.data.Dataset, Dict, Dict, np.ndarray]:
-    """Get train and test datasets and user splits for federated learning.
+    """根据参数获取训练集、测试集以及用于联邦学习的用户数据划分。
 
-    Args:
-        args: Arguments containing dataset configuration
+    参数:
+        args: 包含数据集配置的参数
 
-    Returns:
-        dataset_train: Training dataset
-        dataset_test: Test dataset
-        dict_users_train: Dictionary mapping users to training data indices
-        dict_users_test: Dictionary mapping users to test data indices
-        rand_set_all: Random set assignments for non-iid splitting
+    返回:
+        dataset_train: 训练数据集
+        dataset_test: 测试数据集
+        dict_users_train: 每个用户对应的训练数据索引字典
+        dict_users_test: 每个用户对应的测试数据索引字典
+        rand_set_all: 非IID划分时的随机分配结果
     """
     if args.dataset == 'creditcard':
         dataset_train = DatasetFromCSV('./data/creditcard/creditcard.csv', train=True)
@@ -84,29 +84,30 @@ def get_data(
             dict_users_train = creditcard_noniid(dataset_train, args.num_users, type=args.split_dataset_type,
                                                  list_ratio=args.split_dataset_ratio)
 
-        print("\n--- Client Data Distribution Verification ---")
-        # 直接从 dataset_train 对象中获取用于统计的原始 DataFrame
+        print("\n--- 客户端数据分布验证 ---")
+        # 从 dataset_train 对象中获取真实 DataFrame 用于统计
         stats_df = dataset_train.data
         for client_id in range(args.num_users):
-            # 获取分配给该客户端的数据索引
+            # 获取当前客户端的数据索引
             client_indices = list(dict_users_train[client_id])
-            # 从 DataFrame 中选出该客户端的实际数据
+            # 从 DataFrame 提取该客户端的真实数据
             user_data = stats_df.loc[client_indices]
 
             total_samples = len(user_data)
             fraud_data = user_data[user_data.Class == 1]
             fraud_count = len(fraud_data)
 
-            # 避免在没有欺诈样本时出现除以零的错误
+            # 避免没有欺诈样本时出现除 0 错误
             if fraud_count == 0:
                 avg_fraud_amount = 0
             else:
                 avg_fraud_amount = fraud_data.Amount.mean()
 
             print(
-                f"第{client_id}个客户端: 总样本数量为{total_samples}，欺诈样本数量为{fraud_count}，平均欺诈样本金额为{avg_fraud_amount}")
-        print("--- End of Verification ---\n")
-        # ---  为测试集划分数据  ---
+                f"第{client_id}个客户端: 总样本 {total_samples}，欺诈样本 {fraud_count}，平均欺诈金额 {avg_fraud_amount}")
+        print("--- 验证结束 ---\n")
+
+        # --- 测试集划分 ---
         print("为测试集创建用户数据划分...")
         if args.iid:
             dict_users_test = creditcard_iid(dataset_test, args.num_users)
@@ -115,10 +116,11 @@ def get_data(
                                                 type=getattr(args, 'split_dataset_type', 'type1'),
                                                 list_ratio=getattr(args, 'split_dataset_ratio', [0.1, 0.2, 0.7]))
 
-        # ---  从 DataFrame 中获取标签  ---
+        # --- 从 DataFrame 中获取标签 ---
         labels = dataset_train.data['Class'].values
 
         return dataset_train, dataset_test, dict_users_train, dict_users_test, labels
+
     elif args.dataset == 'cifar10':
         dataset_train = datasets.CIFAR10(
             "data/cifar10", train=True, download=True, transform=trans_cifar10_train
@@ -157,18 +159,18 @@ def prepare_dataloaders(
     dict_users_test: Dict,
     args: Any,
 ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
-    """Prepare train and test data loaders for a user.
+    """为某个用户构建训练集和测试集的 DataLoader。
 
-    Args:
-        dataset_train: Training dataset
-        dict_users_train: Dictionary mapping users to training data indices
-        dataset_test: Test dataset
-        dict_users_test: Dictionary mapping users to test data indices
-        args: Arguments containing batch size configuration
+    参数:
+        dataset_train: 全局训练数据集
+        dict_users_train: 用户对应的训练数据索引
+        dataset_test: 全局测试数据集
+        dict_users_test: 用户对应的测试数据索引
+        args: 包含 batch 大小等配置的参数
 
-    Returns:
-        ldr_train: Training data loader
-        ldr_test: Test data loader
+    返回:
+        ldr_train: 用户的训练 DataLoader
+        ldr_test: 用户的测试 DataLoader
     """
     ldr_train = torch.utils.data.DataLoader(
         DatasetSplit(dataset_train, dict_users_train),
@@ -181,4 +183,3 @@ def prepare_dataloaders(
         shuffle=False,
     )
     return ldr_train, ldr_test
-
