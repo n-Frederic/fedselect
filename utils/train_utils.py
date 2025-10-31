@@ -1,5 +1,6 @@
 from torchvision import datasets, transforms
-from utils.sampling import iid, noniid
+from utils.sampling import iid, noniid, creditcard_iid, creditcard_noniid
+from utils.dataprocess import DatasetFromCSV
 import numpy as np
 import torch
 from typing import Dict, List, Tuple, Any
@@ -73,34 +74,81 @@ def get_data(
         dict_users_test: Dictionary mapping users to test data indices
         rand_set_all: Random set assignments for non-iid splitting
     """
-    dataset_train = datasets.CIFAR10(
-        "data/cifar10", train=True, download=True, transform=trans_cifar10_train
-    )
-    dataset_test = datasets.CIFAR10(
-        "data/cifar10", train=False, download=True, transform=trans_cifar10_val
-    )
-    if args.iid:
-        dict_users_train = iid(dataset_train, args.num_users)
-        dict_users_test = iid(dataset_test, args.num_users)
-        rand_set_all = np.array([])
-    else:
-        dict_users_train, rand_set_all = noniid(
-            dataset_train,
-            args.num_users,
-            args.shard_per_user,
-            args.server_data_ratio,
-            size=args.num_samples,
-        )
-        dict_users_test, rand_set_all = noniid(
-            dataset_test,
-            args.num_users,
-            args.shard_per_user,
-            args.server_data_ratio,
-            size=args.test_size,
-            rand_set_all=rand_set_all,
-        )
+    if args.dataset == 'creditcard':
+        dataset_train = DatasetFromCSV('./data/creditcard/creditcard.csv', train=True)
+        dataset_test = DatasetFromCSV('./data/creditcard/creditcard.csv', train=False)
 
-    return dataset_train, dataset_test, dict_users_train, dict_users_test, rand_set_all
+        if args.iid:
+            dict_users_train = creditcard_iid(dataset_train, args.num_users)
+        else:
+            dict_users_train = creditcard_noniid(dataset_train, args.num_users, type=args.split_dataset_type,
+                                                 list_ratio=args.split_dataset_ratio)
+
+        print("\n--- Client Data Distribution Verification ---")
+        # 直接从 dataset_train 对象中获取用于统计的原始 DataFrame
+        stats_df = dataset_train.data
+        for client_id in range(args.num_users):
+            # 获取分配给该客户端的数据索引
+            client_indices = list(dict_users_train[client_id])
+            # 从 DataFrame 中选出该客户端的实际数据
+            user_data = stats_df.loc[client_indices]
+
+            total_samples = len(user_data)
+            fraud_data = user_data[user_data.Class == 1]
+            fraud_count = len(fraud_data)
+
+            # 避免在没有欺诈样本时出现除以零的错误
+            if fraud_count == 0:
+                avg_fraud_amount = 0
+            else:
+                avg_fraud_amount = fraud_data.Amount.mean()
+
+            print(
+                f"第{client_id}个客户端: 总样本数量为{total_samples}，欺诈样本数量为{fraud_count}，平均欺诈样本金额为{avg_fraud_amount}")
+        print("--- End of Verification ---\n")
+        # ---  为测试集划分数据  ---
+        print("为测试集创建用户数据划分...")
+        if args.iid:
+            dict_users_test = creditcard_iid(dataset_test, args.num_users)
+        else:
+            dict_users_test = creditcard_noniid(dataset_test, args.num_users,
+                                                type=getattr(args, 'split_dataset_type', 'type1'),
+                                                list_ratio=getattr(args, 'split_dataset_ratio', [0.1, 0.2, 0.7]))
+
+        # ---  从 DataFrame 中获取标签  ---
+        labels = dataset_train.data['Class'].values
+
+        return dataset_train, dataset_test, dict_users_train, dict_users_test, labels
+    elif args.dataset == 'cifar10':
+        dataset_train = datasets.CIFAR10(
+            "data/cifar10", train=True, download=True, transform=trans_cifar10_train
+        )
+        dataset_test = datasets.CIFAR10(
+            "data/cifar10", train=False, download=True, transform=trans_cifar10_val
+        )
+        if args.iid:
+            dict_users_train = iid(dataset_train, args.num_users)
+            dict_users_test = iid(dataset_test, args.num_users)
+            rand_set_all = np.array([])
+        else:
+            dict_users_train, rand_set_all = noniid(
+                dataset_train,
+                args.num_users,
+                args.shard_per_user,
+                args.server_data_ratio,
+                size=args.num_samples,
+            )
+            dict_users_test, rand_set_all = noniid(
+                dataset_test,
+                args.num_users,
+                args.shard_per_user,
+                args.server_data_ratio,
+                size=args.test_size,
+                rand_set_all=rand_set_all,
+            )
+
+
+        return dataset_train, dataset_test, dict_users_train, dict_users_test, rand_set_all
 
 
 def prepare_dataloaders(
@@ -134,3 +182,4 @@ def prepare_dataloaders(
         shuffle=False,
     )
     return ldr_train, ldr_test
+

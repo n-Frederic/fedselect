@@ -8,7 +8,7 @@ class FusionModule(nn.Module):
     def __init__(self, client_state_dict, delta_tensor_dict=None):
         super().__init__()
         self.alpha = nn.ParameterDict()
-        self.key_map = {}  # 保存原始 key 和合法 key 的映射
+        self.key_map = {}  # 保存原始 key 和合法 key 的映射关系
 
         for key, param in client_state_dict.items():
             if "weight" in key or "bias" in key:

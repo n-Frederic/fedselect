@@ -320,6 +320,7 @@ def run_base_experiment(model: nn.Module, args: Any) -> None:
     dataset_train, dataset_test, dict_users_train, dict_users_test, labels = get_data(
         args
     )
+
     idxs_users = np.arange(args.num_users * args.frac)
     m = max(int(args.frac * args.num_users), 1)
     idxs_users = np.random.choice(range(args.num_users), m, replace=False)
@@ -369,6 +370,7 @@ def setup_seed(seed: int) -> None:
 if __name__ == "__main__":
     # Argument Parser
     args = lth_args_parser()
+
 
     # Set the seed
     setup_seed(args.seed)
