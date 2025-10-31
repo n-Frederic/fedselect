@@ -371,7 +371,6 @@ if __name__ == "__main__":
     # Argument Parser
     args = lth_args_parser()
 
-
     # Set the seed
     setup_seed(args.seed)
     model = load_model(args)
