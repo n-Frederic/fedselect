@@ -6,14 +6,14 @@ from torch.utils.data import Dataset
 
 
 def iid(dataset: Dataset, num_users: int) -> Dict[int, Set[int]]:
-    """Sample I.I.D. client data from dataset by randomly dividing into equal parts.
+    """从数据集中按 I.I.D.（独立同分布）随机均匀划分客户端数据。
 
-    Args:
-        dataset: The full dataset to sample from
-        num_users: Number of clients to divide data between
+    参数:
+        dataset: 完整数据集
+        num_users: 要划分的客户端数量
 
-    Returns:
-        Dict mapping client IDs to sets of data indices assigned to that client
+    返回:
+        一个字典，将每个客户端 ID 映射到分配给该客户端的数据索引集合
     """
     num_items = int(len(dataset) / num_users)
     dict_users, all_idxs = {}, [i for i in range(len(dataset))]
@@ -31,20 +31,20 @@ def noniid(
     size: Union[int, None] = None,
     rand_set_all: List = [],
 ) -> Tuple[Dict[Union[int, str], Union[np.ndarray, Set[int]]], np.ndarray]:
-    """Sample non-I.I.D client data from dataset by dividing data by class labels.
+    """通过按类别划分数据来生成非 I.I.D. 的客户端数据划分。
 
-    Args:
-        dataset: The full dataset to sample from
-        num_users: Number of clients to divide data between
-        shard_per_user: Number of class shards to assign to each user
-        server_data_ratio: Fraction of data to reserve for server (default: 0.0)
-        size: Optional size to limit each user's data to
-        rand_set_all: Optional pre-defined random class assignments
+    参数:
+        dataset: 完整数据集
+        num_users: 客户端数量
+        shard_per_user: 每个客户端分配多少个类别分片
+        server_data_ratio: 预留给服务器的数据比例（默认 0.0）
+        size: 可选的限制每个客户端数据量大小
+        rand_set_all: 可传入用于划分的随机标签分配数组
 
-    Returns:
-        Tuple containing:
-            - Dict mapping client IDs to arrays of assigned data indices
-            - Array of random class assignments used for the split
+    返回:
+        一个元组:
+            - 客户端 ID 到索引数组的映射字典
+            - 本轮划分使用的随机类别分配序列
     """
     dict_users, all_idxs = {i: np.array([], dtype="int64") for i in range(num_users)}, [
         i for i in range(len(dataset))
@@ -53,7 +53,7 @@ def noniid(
     targets = None
     targets = [elem[1] for elem in dataset]
 
-    # dictionary of indices in the dataset for each label
+    # 为每个 label 建立一个索引表
     idxs_dict = {}
     for i in range(len(dataset)):
         label = torch.tensor(targets[i]).item()
@@ -63,6 +63,8 @@ def noniid(
 
     num_classes = len(np.unique(targets))
     shard_per_class = int(shard_per_user * num_users / num_classes)
+
+    # 将每个类别的数据分成若干 shard
     for label in idxs_dict.keys():
         x = idxs_dict[label]
         num_leftover = len(x) % shard_per_class
@@ -75,12 +77,13 @@ def noniid(
             x[i] = np.concatenate([x[i], [idx]])
         idxs_dict[label] = x
 
+    # 若没有预定义随机序列，则生成一个
     if len(rand_set_all) == 0:
         rand_set_all = list(range(num_classes)) * shard_per_class
         random.shuffle(rand_set_all)
         rand_set_all = np.array(rand_set_all).reshape((num_users, -1))
 
-    # divide and assign
+    # 分配给各个客户端
     for i in range(num_users):
         rand_set_label = rand_set_all[i]
         rand_set = []
@@ -89,6 +92,7 @@ def noniid(
             rand_set.append(idxs_dict[label].pop(idx))
         dict_users[i] = np.concatenate(rand_set)
 
+    # 正确性检查：每个数据索引必须只出现一次
     test = []
     for key, value in dict_users.items():
         x = np.unique(torch.tensor(targets)[value])
@@ -98,6 +102,7 @@ def noniid(
     assert len(test) == len(dataset)
     assert len(set(list(test))) == len(dataset)
 
+    # 若有服务器数据比例，额外分配一份给 server
     if server_data_ratio > 0.0:
         dict_users["server"] = set(
             np.random.choice(
@@ -105,6 +110,7 @@ def noniid(
             )
         )
 
+    # 若 size 不为空，按分片大小切割每个用户的数据
     for i in range(num_users):
         num_elem = len(dict_users[i])
         dict_users[i] = np.concatenate(
@@ -119,14 +125,14 @@ def noniid(
 
 def creditcard_iid(dataset, num_users):
     """
-    Sample I.I.D. client data from creditcard dataset
+    以 I.I.D. 方式从信用卡数据集中划分用户数据
     :param dataset:
     :param num_users:
-    :return: dict of sample index
+    :return: 用户 ID 到数据索引集合的字典
     """
     np.random.seed(0)
     num_items = int(len(dataset)/num_users)
-    dict_users, all_idxs = {}, dataset.data.index #[i for i in range(len(dataset))]
+    dict_users, all_idxs = {}, dataset.data.index
     for i in range(num_users-1):
         dict_users[i] = set(np.random.choice(all_idxs, num_items, replace=False))
         all_idxs = list(set(all_idxs) - dict_users[i])
@@ -136,30 +142,36 @@ def creditcard_iid(dataset, num_users):
 
 def creditcard_noniid(dataset, num_users, type, list_ratio):
     """
-    Sample non-I.I.D client data from creditcard dataset
+    以非 I.I.D. 方式从信用卡数据集中划分客户端数据
+
     :param dataset: 数据集
-    :param num_users: 划分的用户数量，即划分为多少份
-    :param type: 划分类别，1-按照样本数量划分，2-按照欺诈样本数量划分，3-按照欺诈金额划分
-    :param list_ratio: 划分比例
-    :return: 划分后每个客户端分配的样本index集合
+    :param num_users: 客户端数量（划分份数）
+    :param type: 划分方式:
+                 1 - 按样本数量比例划分
+                 2 - 按欺诈样本数量比例划分
+                 3 - 按欺诈金额进行划分（仅支持 3 份）
+    :param list_ratio: 各客户端的划分比例
+    :return: 每个客户端分配到的样本索引集合
     """
     if type not in (1,2,3):
         raise Exception("creditcard_noniid type param error")
     if num_users!= len(list_ratio):
         raise Exception("creditcard_noniid scale param error")
-    # all_idxs = [i for i in range(len(dataset))]
+
     all_idxs = dataset.data.index
     dict_users = {}
     dict_users0 = {}
     dict_users1 = {}
-    if type==1: #按数据集大小比例进行分割
+
+    if type==1: # 按数据集样本数量比例划分
         np.random.seed(123)
         for i in range(len(list_ratio)-1):
             num_items = int(len(dataset)*list_ratio[i]/sum(list_ratio))
             dict_users[i] = set(np.random.choice(all_idxs, num_items, replace=False))
             all_idxs = list(set(all_idxs) - dict_users[i])
         dict_users[i+1] = set(all_idxs)
-    elif type==2: #按欺诈样本比例进行分割
+
+    elif type==2: # 按欺诈样本数量划分
         if num_users != 3 or len(list_ratio) != 3:
             raise Exception("creditcard_noniid scale param error")
         data = dataset.data
@@ -167,54 +179,70 @@ def creditcard_noniid(dataset, num_users, type, list_ratio):
         data1 = data[data.Class == 1]
         idxs_0 = data0.index
         idxs_1 = data1.index
-        for i in range(len(list_ratio) - 1): #先划分欺诈样本
+
+        # 先划分欺诈样本
+        for i in range(len(list_ratio) - 1):
             num_items1 = int(len(data1) * list_ratio[i] / sum(list_ratio))
             dict_users1[i] = set(np.random.choice(idxs_1, num_items1, replace=False))
             idxs_1 = list(set(idxs_1) - dict_users1[i])
         dict_users1[i + 1] = set(idxs_1)
-        for i in range(len(list_ratio) - 1): #再划分正常样本
-            num_items0 = int(len(data)/num_users-len(dict_users1[i]))
+
+        # 再划分正常样本，使每个客户端样本数量接近
+        for i in range(len(list_ratio) - 1):
+            num_items0 = int(len(data)/num_users - len(dict_users1[i]))
             dict_users0[i] = set(np.random.choice(idxs_0, num_items0, replace=False))
             idxs_0 = list(set(idxs_0) - dict_users0[i])
         dict_users0[i + 1] = set(idxs_0)
+
         dict_users = [set(list(dict_users0[i]) + list(dict_users1[i])) for i in range(num_users)]
-    elif type==3: #按欺诈金额进行分割，这个方式目前仅支持将数据集划分为3份
+
+    elif type==3: # 按欺诈金额划分（仅支持 3 个客户端）
         if num_users != 3 or len(list_ratio) != 3:
             raise Exception("creditcard_noniid scale param error")
+
         data = dataset.data
         data0 = data[data.Class == 0]
-        data1 = data[data.Class == 1]
-        data1 = data1.sort_values(by='Amount')
-        all_amount = sum(data1['Amount']) #总共的欺诈金额
-        list_amount = [n / sum(list_ratio) * all_amount for n in list_ratio] #欺诈金额分配到三个节点
-        list_amount0 = list_amount.copy() #备份应分配的金额
-        dict_users1 = {0: [], 1: [], 2: []} #每个节点分配到的欺诈样本
+        data1 = data[data.Class == 1].sort_values(by='Amount')
+
+        all_amount = sum(data1['Amount'])  # 总欺诈金额
+        list_amount = [n / sum(list_ratio) * all_amount for n in list_ratio]  # 每个节点应分配的欺诈金额
+        list_amount0 = list_amount.copy()
+
+        dict_users1 = {0: [], 1: [], 2: []}  # 每个节点的欺诈样本
+
+        # 逐个样本按金额填充
         while (1):
-            if len(data1) == 0: #若欺诈数据已分配完则退出循环
+            if len(data1) == 0:
                 break
             if list_amount[0] > 0 and len(data1) > 0:
-                dict_users1[0].append(data1.iloc[0].name)  # 将data1中第0行数据的索引加入到集合中
-                list_amount[0] = list_amount[0] - (data1.iloc[0]).Amount  # 减去已分配的金额
-                data1 = data1.drop(index=data1.iloc[0].name)  # 删除data1的第0行数据
+                dict_users1[0].append(data1.iloc[0].name)
+                list_amount[0] -= data1.iloc[0].Amount
+                data1 = data1.drop(index=data1.iloc[0].name)
             if list_amount[1] > 0 and len(data1) > 0:
                 dict_users1[1].append(data1.iloc[0].name)
-                list_amount[1] = list_amount[1] - (data1.iloc[0]).Amount
+                list_amount[1] -= data1.iloc[0].Amount
                 data1 = data1.drop(index=data1.iloc[0].name)
             if list_amount[2] > 0 and len(data1) > 0:
                 dict_users1[2].append(data1.iloc[0].name)
-                list_amount[2] = list_amount[2] - (data1.iloc[0]).Amount
+                list_amount[2] -= data1.iloc[0].Amount
                 data1 = data1.drop(index=data1.iloc[0].name)
-        list_amount1 = [list_amount0[i] - list_amount[i] for i in range(3)] #实际分配到每个节点的欺诈金额
-        print("欺诈金额分配比例：",list_ratio)
-        print("实际分配到每个节点的欺诈金额:",list_amount1)
-        dict_users0 = {0: [], 1: [], 2: []} #每个节点分配到的正常样本
-        sample_num = int(len(data)/3) #每个节点应分配的样本数量
+
+        list_amount1 = [list_amount0[i] - list_amount[i] for i in range(3)]
+        print("欺诈金额分配比例：", list_ratio)
+        print("实际每个节点分配到的欺诈金额:", list_amount1)
+
+        dict_users0 = {0: [], 1: [], 2: []}
+        sample_num = int(len(data)/3)
         data0_indexs = data0.index
-        for i in range(2): #将正常样本分配到各个节点，正常样本数量和异常样本加起来是数量平均分配的
+
+        for i in range(2):
             dict_users0[i] = set(np.random.choice(data0_indexs, sample_num-len(dict_users1[i]), replace=False))
             data0_indexs = list(set(data0_indexs) - dict_users0[i])
         dict_users0[2] = data0_indexs
-        dict_users = [set(list(dict_users0[i]) + list(dict_users1[i])) for i in range(3)] #实际分配到每个节点的样本=正常样本+欺诈样本
+
+        dict_users = [set(list(dict_users0[i]) + list(dict_users1[i])) for i in range(3)]
+
     else:
-        raise Exception("creditcard数据集non-iid分割，type参数error")
+        raise Exception("creditcard 数据集 non-iid 分割：type 参数错误")
+
     return dict_users
