@@ -2,10 +2,11 @@ import pandas as pd
 import numpy as np
 from torch.utils.data.dataset import Dataset
 import torch
-from PIL import Image
+# from PIL import Image
 from sklearn.model_selection import train_test_split
 
 from imblearn.over_sampling import SMOTE
+
 
 class DatasetFromCSV(Dataset):
     def __init__(self, csv_path, train=True):
@@ -14,7 +15,7 @@ class DatasetFromCSV(Dataset):
         self.data_all = self.data_all[order]
         y = self.data_all['Class']
         self.data_train, self.data_test = train_test_split(self.data_all, test_size=0.2, random_state=888,stratify=y)
-        #统计测试数据集中的欺诈金额和欺诈样本数量
+        # 统计测试数据集中的欺诈金额和欺诈样本数量
         amount1 = self.data_test[self.data_test['Class']==1].Amount.sum()
         count1 = self.data_test[self.data_test['Class'] == 1].Amount.count()
         print("划分数据集,条件：train=",train)

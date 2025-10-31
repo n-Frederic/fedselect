@@ -147,7 +147,6 @@ def get_data(
                 rand_set_all=rand_set_all,
             )
 
-
         return dataset_train, dataset_test, dict_users_train, dict_users_test, rand_set_all
 
 

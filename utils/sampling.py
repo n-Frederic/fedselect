@@ -115,6 +115,8 @@ def noniid(
         )
 
     return dict_users, rand_set_all
+
+
 def creditcard_iid(dataset, num_users):
     """
     Sample I.I.D. client data from creditcard dataset

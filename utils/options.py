@@ -73,7 +73,8 @@ def lth_args_parser():
     args = parser.parse_args()
     return args
 
-class Args():
+
+class Args:
     def __init__(self):
         # federated arguments
         self.epochs = 200  #rounds of training
