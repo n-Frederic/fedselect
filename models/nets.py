@@ -9,7 +9,7 @@ import torch.nn as nn
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim: int = 784, hidden: int = 200, num_classes: int = 10):
+    def __init__(self, input_dim: int = 29, hidden: int = 200, num_classes: int = 2):
         super().__init__()
         self.net = nn.Sequential(
             nn.Flatten(),
