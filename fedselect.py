@@ -188,7 +188,7 @@ def fedselect_algorithm(
     prune_rate = args.prune_percent / 100
     prune_target = args.prune_target / 100
     lottery_ticket_convergence = []
-    client_delta_tensors = {i: None for i in idxs_users}
+    # client_delta_tensors = {i: None for i in idxs_users}
 
     # 开始联邦学习
     for round_num in range(com_rounds):
@@ -229,7 +229,7 @@ def fedselect_algorithm(
                 )
                 client_state_dict_prev[i] = copy.deepcopy(client_state_dicts[i])
                 client_masks_prev[i] = copy.deepcopy(client_mask)
-                client_delta_tensors[i] = copy.deepcopy(delta_tensor_dict)
+                # client_delta_tensors[i] = copy.deepcopy(delta_tensor_dict)
 
         round_loss /= len(idxs_users)
         cross_client_acc = cross_client_eval(
@@ -253,9 +253,9 @@ def fedselect_algorithm(
             # 服务器将非 Lottery Ticket 的参数广播到每个设备
             print(f"round_num is {round_num}")
             for i in idxs_users:
-                fushion_module = FusionModule(client_state_dicts[i],client_delta_tensors[i])
+                # fushion_module = FusionModule(client_state_dicts[i],client_delta_tensors[i])
                 client_state_dicts[i] = broadcast_server_to_client_initialization(
-                    server_weights, client_masks[i], client_state_dicts[i], client_delta_tensors[i], fusion_module=fushion_module
+                    server_weights, client_masks[i], client_state_dicts[i]
                 )
             server_accumulate_mask = OrderedDict()
             server_weights = OrderedDict()
