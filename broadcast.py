@@ -4,50 +4,48 @@ import torch.nn.functional as F
 from typing import OrderedDict
 
 
-class FusionModule(nn.Module):
-    def __init__(self, client_state_dict, delta_tensor_dict=None):
-        super().__init__()
-        self.alpha = nn.ParameterDict()
-        self.key_map = {}  # 保存原始 key 和合法 key 的映射关系
-
-        for key, param in client_state_dict.items():
-            if "weight" in key or "bias" in key:
-                safe_key = key.replace(".", "__")  # 替换掉点号
-                self.key_map[safe_key] = key
-
-                if delta_tensor_dict is not None and key in delta_tensor_dict:
-                    delta = delta_tensor_dict[key]
-                    mean, std = delta.mean(), delta.std() + 1e-8
-                    normalized = (delta - mean) / std
-                    init_alpha = normalized
-                else:
-                    init_alpha = torch.zeros_like(param)
-
-                self.alpha[safe_key] = nn.Parameter(init_alpha)
-
-    def forward(self, local_state_dict, global_state_dict):
-        fused_state_dict = {}
-        for safe_key, orig_key in self.key_map.items():
-            local_param = local_state_dict[orig_key]
-            global_param = global_state_dict[orig_key]
-            weight_factor = torch.sigmoid(self.alpha[safe_key])
-            fused_state_dict[orig_key] = weight_factor * global_param + (1 - weight_factor) * local_param
-
-        # 其它非 weight/bias 的参数保持不变
-        for key in local_state_dict.keys():
-            if key not in self.key_map.values():
-                fused_state_dict[key] = local_state_dict[key]
-
-        return fused_state_dict
+# class FusionModule(nn.Module):
+#     def __init__(self, client_state_dict, delta_tensor_dict=None):
+#         super().__init__()
+#         self.alpha = nn.ParameterDict()
+#         self.key_map = {}  # 保存原始 key 和合法 key 的映射关系
+#
+#         for key, param in client_state_dict.items():
+#             if "weight" in key or "bias" in key:
+#                 safe_key = key.replace(".", "__")  # 替换掉点号
+#                 self.key_map[safe_key] = key
+#
+#                 if delta_tensor_dict is not None and key in delta_tensor_dict:
+#                     delta = delta_tensor_dict[key]
+#                     mean, std = delta.mean(), delta.std() + 1e-8
+#                     normalized = (delta - mean) / std
+#                     init_alpha = normalized
+#                 else:
+#                     init_alpha = torch.zeros_like(param)
+#
+#                 self.alpha[safe_key] = nn.Parameter(init_alpha)
+#
+#     def forward(self, local_state_dict, global_state_dict):
+#         fused_state_dict = {}
+#         for safe_key, orig_key in self.key_map.items():
+#             local_param = local_state_dict[orig_key]
+#             global_param = global_state_dict[orig_key]
+#             weight_factor = torch.sigmoid(self.alpha[safe_key])
+#             fused_state_dict[orig_key] = weight_factor * global_param + (1 - weight_factor) * local_param
+#
+#         # 其它非 weight/bias 的参数保持不变
+#         for key in local_state_dict.keys():
+#             if key not in self.key_map.values():
+#                 fused_state_dict[key] = local_state_dict[key]
+#
+#         return fused_state_dict
 
 
 def broadcast_server_to_client_initialization(
         server_weights: OrderedDict[str, torch.Tensor],
         mask: OrderedDict[str, torch.Tensor],
         client_initialization: OrderedDict[str, torch.Tensor],
-        delta_tensor_dict: OrderedDict[str, torch.Tensor],
-        epsilon: float = 1e-8,
-        fusion_module = None,
+        fusion_module=None,
 ) -> OrderedDict[str, torch.Tensor]:
     """将服务器权重广播给客户端初始化（仅对 mask 为非本地参数的位置进行覆盖）
 
