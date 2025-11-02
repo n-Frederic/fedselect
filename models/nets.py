@@ -12,9 +12,8 @@ class MLP(nn.Module):
     def __init__(self, input_dim: int = 784, hidden: int = 200, num_classes: int = 10):
         super().__init__()
         self.net = nn.Sequential(
+            nn.Flatten(),
             nn.Linear(input_dim, hidden),
-            nn.ReLU(),
-            nn.Linear(hidden, hidden),
             nn.ReLU(),
             nn.Linear(hidden, num_classes)
         )
