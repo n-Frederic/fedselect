@@ -15,6 +15,10 @@ class DatasetFromCSV(Dataset):
         self.data_all = self.data_all[order]
         y = self.data_all['Class']
         self.data_train, self.data_test = train_test_split(self.data_all, test_size=0.2, random_state=888,stratify=y)
+
+        self.data_train = self.data_train.reset_index(drop=True)
+        self.data_test = self.data_test.reset_index(drop=True)
+
         # 统计测试数据集中的欺诈金额和欺诈样本数量
         amount1 = self.data_test[self.data_test['Class']==1].Amount.sum()
         count1 = self.data_test[self.data_test['Class'] == 1].Amount.count()

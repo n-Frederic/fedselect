@@ -132,7 +132,7 @@ def creditcard_iid(dataset, num_users):
     """
     np.random.seed(0)
     num_items = int(len(dataset)/num_users)
-    dict_users, all_idxs = {}, dataset.data.index
+    dict_users, all_idxs = {}, np.arange(len(dataset))
     for i in range(num_users-1):
         dict_users[i] = set(np.random.choice(all_idxs, num_items, replace=False))
         all_idxs = list(set(all_idxs) - dict_users[i])
@@ -158,7 +158,7 @@ def creditcard_noniid(dataset, num_users, type, list_ratio):
     if num_users!= len(list_ratio):
         raise Exception("creditcard_noniid scale param error")
 
-    all_idxs = dataset.data.index
+    all_idxs = np.arange(len(dataset))
     dict_users = {}
     dict_users0 = {}
     dict_users1 = {}
@@ -177,8 +177,8 @@ def creditcard_noniid(dataset, num_users, type, list_ratio):
         data = dataset.data
         data0 = data[data.Class == 0]
         data1 = data[data.Class == 1]
-        idxs_0 = data0.index
-        idxs_1 = data1.index
+        idxs_0 = np.where(dataset.labels == 0)[0]
+        idxs_1 = np.where(dataset.labels == 1)[0]
 
         # 先划分欺诈样本
         for i in range(len(list_ratio) - 1):

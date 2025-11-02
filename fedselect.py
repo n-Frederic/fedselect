@@ -21,6 +21,7 @@ from broadcast import (
 )
 import random
 from torchvision.models import resnet18
+from models.nets import get_model
 
 
 def evaluate(
@@ -345,10 +346,11 @@ def load_model(args: Any) -> nn.Module:
     """
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     args.device = device
-    model = resnet18(pretrained=args.pretrained_init)
-    num_ftrs = model.fc.in_features
-    model.fc = nn.Linear(num_ftrs, args.num_classes)
-    model = model.to(device)
+    # model = resnet18(pretrained=args.pretrained_init)
+    model = get_model(name=args.model, input_dim=29, num_classes=2)
+    # num_ftrs = model.fc.in_features
+    # model.fc = nn.Linear(num_ftrs, args.num_classes)
+    # model = model.to(device)
     return model.to(device)
 
 
