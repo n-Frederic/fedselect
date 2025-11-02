@@ -235,7 +235,8 @@ def get_mask_from_delta(
                 return_mask[name] = torch.from_numpy(new_mask).to(device)
 
     # print(eval_per_layer_sparsity(return_mask))
-    print(eval_layer_sparsity(return_mask, "fc.weight"))
+    print("Sparsity per layer after update:")
+    print(eval_per_layer_sparsity(return_mask))
     return return_mask, delta_tensor_dict
 
 
