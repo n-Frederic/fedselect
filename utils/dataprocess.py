@@ -59,6 +59,7 @@ class DatasetBalance(Dataset):
     def __len__(self):
         return len(self.data.index)
 
+
 class DatasetFromDataframe(Dataset):
     def __init__(self, data_frame):
         self.data = data_frame
