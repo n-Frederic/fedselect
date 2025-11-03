@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, List, OrderedDict, Tuple, Optional, Any
 
+from utils.drift_process import drift_detect, compute_z, apply_hypernet_delta
 # 自定义库
 from utils.options import lth_args_parser
 from utils.train_utils import prepare_dataloaders, get_data
@@ -23,6 +24,7 @@ from torchvision.models import resnet18
 from models.nets import get_model
 from models.fed_aggregation import FedAVG, FedMEAN, FedRWA, compute_risk_score
 from utils.train_utils import get_client_fraud_stats
+from models.hypernetwork import HyperNetwork
 
 
 from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score, roc_auc_score
@@ -189,6 +191,12 @@ def fedselect_algorithm(
     prune_rate = args.prune_percent / 100
     prune_target = args.prune_target / 100
     lottery_ticket_convergence = []
+    z_dim = 64
+    delta_dim = 402
+    hypernet = HyperNetwork(z_dim=z_dim, delta_dim=delta_dim).to(args.device)
+    hypernet_optimizer = torch.optim.Adam(hypernet.parameters(), lr=1e-3)
+    criterion = nn.CrossEntropyLoss()
+    client_old_data = {}
     # client_delta_tensors = {i: None for i in idxs_users}
 
     # 开始联邦学习
@@ -215,6 +223,7 @@ def fedselect_algorithm(
                 dict_users_test[i],
                 args,
             )
+
             # 本地更新 LTN_i
             client_mask = client_masks_prev.get(i)
             # 本地更新 u_i 参数（0 为全局，1 为本地）
@@ -252,6 +261,51 @@ def fedselect_algorithm(
                 client_accuracies_dict[i] = 1.0 / (1.0 + loss)
                 client_risk_scores[i] = float(len(dict_users_train[i]))
             
+
+            # try:
+            #     batch = next(iter(ldr_train))
+            # except StopIteration:
+            #     batch = None
+            #
+            # if batch is not None:
+            #     # 假设 batch 是 (inputs, labels)
+            #     batch_x = batch[0].to(args.device)
+            #     # 展平（如果输入已经是向量可以跳过）
+            #     batch_x = batch_x.view(batch_x.size(0), -1)  # (N, 29)
+            #     batch_y = batch[1].to(args.device)
+            #     # 获取旧的 batch（第0轮没有旧数据）
+            #     if round_num == 0 or (i not in client_old_data):
+            #         old_batch = batch_x.clone()
+            #     else:
+            #         old_batch = client_old_data[i]
+            #
+            #     # 保存本轮 batch 供下一轮比较
+            #     client_old_data[i] = batch_x.clone()
+            #
+            #     # 漂移检测
+            #     drift_flag, mean_diff, std_diff = drift_detect(old_batch, batch_x, threshold=0.05)
+            #
+            #     if drift_flag:
+            #         delta_vec, applied_w_delta, applied_b_delta = apply_hypernet_delta(
+            #             client_model=client_model,
+            #             hypernet=hypernet,
+            #             mean_diff=mean_diff,
+            #             std_diff=std_diff,
+            #             drift_flag=drift_flag,
+            #             scale=0.01,
+            #             clip_val_w=1.0,
+            #             clip_val_b=0.1,
+            #             train_hypernet=True,
+            #             criterion=criterion,
+            #             batch_x=batch_x.to(args.device),
+            #             batch_y=batch_y.to(args.device),
+            #             optimizer=hypernet_optimizer,
+            #             device=args.device
+            #         )
+            #
+            #         print(
+            #             f"[Round {round_num}] Client {i}: Δw.norm={applied_w_delta.norm():.4f}, bias Δ.norm={(applied_b_delta.norm() if applied_b_delta is not None else 0):.4f}")
+
             # 发送 u_i 更新给服务器
             if round_num < com_rounds - 1:
                 server_accumulate_mask = add_masks(server_accumulate_mask, client_mask)
