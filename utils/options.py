@@ -104,5 +104,5 @@ class Args:
         # new added arguments
         self.split_dataset_type = 1 # 1-根据数据集大小划分，2-根据欺诈样本比例划分(此时各节点数据集大小相同)，3-根据欺诈金额比例划分(此时各节点数据集大小相同)
         self.split_dataset_ratio = [1,2,2,3,3,4,4,1,2,3,1,2,2,3,3,4,3,1,2,3]  #划分数据集时的数据比例
-        self.fed_type = 4 #联邦聚合方式  1-FedAVG，2-FedMEAN，3-FedRWA, 4-FedProx, 5-Moon
+        self.fed_type = 3 #联邦聚合方式  1-FedAVG，2-FedMEAN，3-FedRWA, 4-FedProx, 5-Moon
         self.risk_type = 3 #风险权值类型   1-数据集大小，2-数据集欺诈样本数量，3-数据集欺诈样本金额

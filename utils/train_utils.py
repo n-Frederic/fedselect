@@ -3,6 +3,7 @@ from utils.sampling import iid, noniid, creditcard_iid, creditcard_noniid
 from utils.dataprocess import DatasetFromCSV
 import numpy as np
 import torch
+import pandas as pd
 from typing import Dict, List, Tuple, Any
 
 
@@ -183,3 +184,55 @@ def prepare_dataloaders(
         shuffle=False,
     )
     return ldr_train, ldr_test
+
+
+def get_client_fraud_stats(
+    dataset: Any,
+    client_indices: List[int]
+) -> Dict[str, float]:
+    """获取客户端数据集的欺诈统计信息
+    
+    Args:
+        dataset: 数据集对象（应该有 .data 属性，包含 DataFrame）
+        client_indices: 客户端的数据索引列表
+    
+    Returns:
+        包含以下键的字典:
+        - dataset_size: 数据集总大小
+        - fraud_count: 欺诈样本数量 (Class==1)
+        - normal_count: 正常样本数量 (Class==0)
+        - fraud_amount: 欺诈样本金额总和
+        - avg_fraud_amount: 平均欺诈金额
+    """
+    # 如果 dataset 有 .data 属性（如 DatasetFromCSV）
+    if hasattr(dataset, 'data') and isinstance(dataset.data, pd.DataFrame):
+        # 确保 client_indices 是 list（可能是 set 或 ndarray）
+        if not isinstance(client_indices, list):
+            client_indices = list(client_indices)
+        user_data = dataset.data.loc[client_indices]
+        
+        dataset_size = len(user_data)
+        fraud_data = user_data[user_data['Class'] == 1]
+        normal_data = user_data[user_data['Class'] == 0]
+        
+        fraud_count = len(fraud_data)
+        normal_count = len(normal_data)
+        fraud_amount = fraud_data['Amount'].sum() if fraud_count > 0 else 0.0
+        avg_fraud_amount = fraud_data['Amount'].mean() if fraud_count > 0 else 0.0
+        
+        return {
+            'dataset_size': dataset_size,
+            'fraud_count': fraud_count,
+            'normal_count': normal_count,
+            'fraud_amount': float(fraud_amount),
+            'avg_fraud_amount': float(avg_fraud_amount)
+        }
+    else:
+        # 对于非 creditcard 数据集，返回默认值
+        return {
+            'dataset_size': len(client_indices),
+            'fraud_count': 0,
+            'normal_count': len(client_indices),
+            'fraud_amount': 0.0,
+            'avg_fraud_amount': 0.0
+        }
