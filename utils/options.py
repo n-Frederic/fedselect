@@ -70,39 +70,13 @@ def lth_args_parser():
                         help="type of non-iid split for creditcard dataset")
     parser.add_argument('--split_dataset_ratio', type=list, default=[0.4, 0.3, 0.3],
                         help="ratio of non-iid split for creditcard dataset")
+
+    parser.add_argument("--momentum", type=float, default=0.5, help="SGD momentum (default: 0.5)")
+    parser.add_argument("--gpu", type=int, default=-1, help="GPU ID, -1 for CPU")
+    parser.add_argument('--verbose', action='store_true', default=True, help="verbose print")
+    parser.add_argument("--fed_type", type=int, default=3,
+                        help="联邦聚合方式  1-FedAVG，2-FedMEAN，3-FedRWA, 4-FedProx, 5-Moon")
+    parser.add_argument("--risk_type", type=int, default=3,
+                        help="风险权值类型   1-数据集大小，2-数据集欺诈样本数量，3-数据集欺诈样本金额")
     args = parser.parse_args()
     return args
-
-
-class Args:
-    def __init__(self):
-        # federated arguments
-        self.epochs = 200  #rounds of training
-        self.num_users = 30  #number of users: K
-        self.frac = 0.4  #the fraction of clients: C
-        self.local_ep = 2  #the number of local epochs: E
-        self.local_bs = 128  #local batch size: B
-        self.bs = 128  #test batch size
-        self.lr = 0.01  #learning rate
-        self.momentum = 0.5 #SGD momentum (default: 0.5)
-        # self.split = 'user'  # train-test split type, user or sample
-
-        # model arguments
-        self.model = 'mlp'  # model name
-
-        # other arguments
-        self.dataset = 'creditcard'  # name of dataset
-        self.iid = True  # whether i.i.d or not
-        self.num_classes = 2  # number of classes
-        # self.num_channels = 1  # number of channels of imges
-        self.gpu = -1  # GPU ID, -1 for CPU
-        # self.stopping_rounds = 10  # rounds of early stopping
-        self.verbose = True  # verbose print
-        self.seed = 1  # random seed (default: 1)
-        self.all_clients = False  # aggregation over all clients
-
-        # new added arguments
-        self.split_dataset_type = 1 # 1-根据数据集大小划分，2-根据欺诈样本比例划分(此时各节点数据集大小相同)，3-根据欺诈金额比例划分(此时各节点数据集大小相同)
-        self.split_dataset_ratio = [1,2,2,3,3,4,4,1,2,3,1,2,2,3,3,4,3,1,2,3]  #划分数据集时的数据比例
-        self.fed_type = 3 #联邦聚合方式  1-FedAVG，2-FedMEAN，3-FedRWA, 4-FedProx, 5-Moon
-        self.risk_type = 3 #风险权值类型   1-数据集大小，2-数据集欺诈样本数量，3-数据集欺诈样本金额
