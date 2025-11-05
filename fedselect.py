@@ -204,14 +204,14 @@ def fedselect_algorithm(
         round_loss = 0
         
         # 用于风险加权聚合的变量
-        client_param_updates = {}  # 存储每个客户端的参数更新
-        client_sample_nums = {}  # 存储每个客户端的样本数量
-        client_accuracies_dict = {}  # 存储每个客户端的准确率
-        client_risk_scores = {}  # 存储每个客户端的风险分数
+        # client_param_updates = {}  # 存储每个客户端的参数更新
+        # client_sample_nums = {}  # 存储每个客户端的样本数量
+        # client_accuracies_dict = {}  # 存储每个客户端的准确率
+        # client_risk_scores = {}  # 存储每个客户端的风险分数
         
         for i in idxs_users:
             # 保存训练前的状态（用于计算参数更新）
-            state_before_training = copy.deepcopy(model.state_dict()) if hasattr(args, 'dataset') and args.dataset == 'creditcard' and getattr(args, 'fed_type', 0) in [1, 2, 3] else None
+            # state_before_training = copy.deepcopy(model.state_dict()) if hasattr(args, 'dataset') and args.dataset == 'creditcard' and getattr(args, 'fed_type', 0) in [1, 2, 3] else None
             
             # 初始化模型
             model.load_state_dict(client_state_dicts[i])
@@ -231,35 +231,35 @@ def fedselect_algorithm(
             round_loss += loss
             
             # 收集客户端的风险统计信息（仅对 creditcard 数据集）
-            if hasattr(args, 'dataset') and args.dataset == 'creditcard':
-                fraud_stats = get_client_fraud_stats(dataset_train, dict_users_train[i])
-                client_sample_nums[i] = fraud_stats['dataset_size']
-                
-                # 计算客户端准确率（这里简化，使用损失的倒数作为代理）
-                # 在实际应用中，应该在验证集上评估准确率
-                client_accuracies_dict[i] = 1.0 / (1.0 + loss)
-                
-                # 计算风险分数
-                risk_type = getattr(args, 'risk_type', 1)
-                client_risk_scores[i] = compute_risk_score(
-                    dataset_size=fraud_stats['dataset_size'],
-                    fraud_count=fraud_stats['fraud_count'],
-                    normal_count=fraud_stats['normal_count'],
-                    fraud_amount=fraud_stats['fraud_amount'],
-                    risk_type=risk_type
-                )
-                
-                # 存储参数更新（训练后 - 训练前）
-                param_update = OrderedDict()
-                if state_before_training is not None:
-                    for k in client_model.state_dict().keys():
-                        param_update[k] = client_model.state_dict()[k] - state_before_training[k]
-                    client_param_updates[i] = param_update
-            else:
-                # 非 creditcard 数据集，使用默认值
-                client_sample_nums[i] = len(dict_users_train[i])
-                client_accuracies_dict[i] = 1.0 / (1.0 + loss)
-                client_risk_scores[i] = float(len(dict_users_train[i]))
+            # if hasattr(args, 'dataset') and args.dataset == 'creditcard':
+            #     fraud_stats = get_client_fraud_stats(dataset_train, dict_users_train[i])
+            #     client_sample_nums[i] = fraud_stats['dataset_size']
+            #
+            #     # 计算客户端准确率（这里简化，使用损失的倒数作为代理）
+            #     # 在实际应用中，应该在验证集上评估准确率
+            #     client_accuracies_dict[i] = 1.0 / (1.0 + loss)
+            #
+            #     # 计算风险分数
+            #     risk_type = getattr(args, 'risk_type', 1)
+            #     client_risk_scores[i] = compute_risk_score(
+            #         dataset_size=fraud_stats['dataset_size'],
+            #         fraud_count=fraud_stats['fraud_count'],
+            #         normal_count=fraud_stats['normal_count'],
+            #         fraud_amount=fraud_stats['fraud_amount'],
+            #         risk_type=risk_type
+            #     )
+            #
+            #     # 存储参数更新（训练后 - 训练前）
+            #     param_update = OrderedDict()
+            #     if state_before_training is not None:
+            #         for k in client_model.state_dict().keys():
+            #             param_update[k] = client_model.state_dict()[k] - state_before_training[k]
+            #         client_param_updates[i] = param_update
+            # else:
+            #     # 非 creditcard 数据集，使用默认值
+            #     client_sample_nums[i] = len(dict_users_train[i])
+            #     client_accuracies_dict[i] = 1.0 / (1.0 + loss)
+            #     client_risk_scores[i] = float(len(dict_users_train[i]))
             
 
             # try:
@@ -345,62 +345,71 @@ def fedselect_algorithm(
         print("Client Accs: ", accs, " | Mean: ", accs.mean())
 
         if round_num < com_rounds - 1:
+            # 服务器对 u_i 求平均
+            server_weights = div_server_weights(server_weights, server_accumulate_mask)
+            # 服务器将非 Lottery Ticket 的参数广播到每个设备
+            print(f"round_num is {round_num}")
+            for i in idxs_users:
+                # fushion_module = FusionModule(client_state_dicts[i],client_delta_tensors[i])
+                client_state_dicts[i] = broadcast_server_to_client_initialization(
+                    server_weights, client_masks[i], client_state_dicts[i]
+                )
             # 选择聚合算法
-            fed_type = getattr(args, 'fed_type', 0)  # 默认使用原始方法
-            
-            if fed_type in [1, 2, 3] and hasattr(args, 'dataset') and args.dataset == 'creditcard':
-                # 使用新的聚合算法（FedAVG, FedMEAN, FedRWA）
-                print(f"使用聚合算法类型: {fed_type} ({'FedAVG' if fed_type == 1 else 'FedMEAN' if fed_type == 2 else 'FedRWA'})")
-                
-                # 准备聚合所需的数据
-                dw_list = [client_param_updates[i] for i in idxs_users]
-                sample_nums = [client_sample_nums[i] for i in idxs_users]
-                accuracies = [client_accuracies_dict[i] for i in idxs_users]
-                risk_scores = [client_risk_scores[i] for i in idxs_users]
-                
-                # 获取一个参考客户端的状态作为基准
-                reference_state = client_state_dicts[idxs_users[0]]
-                
-                # 执行聚合
-                if fed_type == 1:
-                    # FedAVG: 基于样本数量加权
-                    aggregated_state = FedAVG(reference_state, dw_list, sample_nums)
-                elif fed_type == 2:
-                    # FedMEAN: 简单平均
-                    aggregated_state = FedMEAN(reference_state, dw_list)
-                elif fed_type == 3:
-                    # FedRWA: 风险加权
-                    print(f"风险分数: {risk_scores}")
-                    aggregated_state = FedRWA(reference_state, dw_list, accuracies, risk_scores)
-                
-                # 将聚合后的参数广播到所有客户端
-                for i in idxs_users:
-                    # 应用 mask：只更新非本地参数（mask==0 的部分）
-                    for key in aggregated_state.keys():
-                        if "weight" in key or "bias" in key:
-                            if client_masks[i] is not None and key in client_masks[i]:
-                                # 只在 mask 为 0（全局参数）的位置更新
-                                client_state_dicts[i][key] = torch.where(
-                                    client_masks[i][key] == 0,
-                                    aggregated_state[key],
-                                    client_state_dicts[i][key]
-                                )
-                            else:
-                                # 如果没有 mask，直接使用聚合后的参数
-                                client_state_dicts[i][key] = aggregated_state[key]
-                        else:
-                            # 其他参数（如 BN 的 running_mean 等）直接复制
-                            client_state_dicts[i][key] = aggregated_state[key]
-            else:
-                # 使用原始的聚合方法（FedSelect 默认方法）
-                server_weights = div_server_weights(server_weights, server_accumulate_mask)
-                # 服务器将非 Lottery Ticket 的参数广播到每个设备
-                print(f"round_num is {round_num}")
-                for i in idxs_users:
-                    client_state_dicts[i] = broadcast_server_to_client_initialization(
-                        server_weights, client_masks[i], client_state_dicts[i]
-                    )
-            
+            # fed_type = getattr(args, 'fed_type', 0)  # 默认使用原始方法
+            #
+            # if fed_type in [1, 2, 3] and hasattr(args, 'dataset') and args.dataset == 'creditcard':
+            #     # 使用新的聚合算法（FedAVG, FedMEAN, FedRWA）
+            #     print(f"使用聚合算法类型: {fed_type} ({'FedAVG' if fed_type == 1 else 'FedMEAN' if fed_type == 2 else 'FedRWA'})")
+            #
+            #     # 准备聚合所需的数据
+            #     dw_list = [client_param_updates[i] for i in idxs_users]
+            #     sample_nums = [client_sample_nums[i] for i in idxs_users]
+            #     accuracies = [client_accuracies_dict[i] for i in idxs_users]
+            #     risk_scores = [client_risk_scores[i] for i in idxs_users]
+            #
+            #     # 获取一个参考客户端的状态作为基准
+            #     reference_state = client_state_dicts[idxs_users[0]]
+            #
+            #     # 执行聚合
+            #     if fed_type == 1:
+            #         # FedAVG: 基于样本数量加权
+            #         aggregated_state = FedAVG(reference_state, dw_list, sample_nums)
+            #     elif fed_type == 2:
+            #         # FedMEAN: 简单平均
+            #         aggregated_state = FedMEAN(reference_state, dw_list)
+            #     elif fed_type == 3:
+            #         # FedRWA: 风险加权
+            #         print(f"风险分数: {risk_scores}")
+            #         aggregated_state = FedRWA(reference_state, dw_list, accuracies, risk_scores)
+            #
+            #     # 将聚合后的参数广播到所有客户端
+            #     for i in idxs_users:
+            #         # 应用 mask：只更新非本地参数（mask==0 的部分）
+            #         for key in aggregated_state.keys():
+            #             if "weight" in key or "bias" in key:
+            #                 if client_masks[i] is not None and key in client_masks[i]:
+            #                     # 只在 mask 为 0（全局参数）的位置更新
+            #                     client_state_dicts[i][key] = torch.where(
+            #                         client_masks[i][key] == 0,
+            #                         aggregated_state[key],
+            #                         client_state_dicts[i][key]
+            #                     )
+            #                 else:
+            #                     # 如果没有 mask，直接使用聚合后的参数
+            #                     client_state_dicts[i][key] = aggregated_state[key]
+            #             else:
+            #                 # 其他参数（如 BN 的 running_mean 等）直接复制
+            #                 client_state_dicts[i][key] = aggregated_state[key]
+            # else:
+            #     # 使用原始的聚合方法（FedSelect 默认方法）
+            #     server_weights = div_server_weights(server_weights, server_accumulate_mask)
+            #     # 服务器将非 Lottery Ticket 的参数广播到每个设备
+            #     print(f"round_num is {round_num}")
+            #     for i in idxs_users:
+            #         client_state_dicts[i] = broadcast_server_to_client_initialization(
+            #             server_weights, client_masks[i], client_state_dicts[i]
+            #         )
+            #
             server_accumulate_mask = OrderedDict()
             server_weights = OrderedDict()
 

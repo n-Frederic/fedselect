@@ -10,7 +10,6 @@ def drift_detect(old_data, new_data, threshold=0.1):
     old_mean = old_data.mean(dim=0)
     new_mean = new_data.mean(dim=0)
     mean_diff = (new_mean - old_mean)
-
     old_std = old_data.std(dim=0)
     new_std = new_data.std(dim=0)
     std_diff = (new_std - old_std)
