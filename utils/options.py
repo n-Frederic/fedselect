@@ -71,9 +71,6 @@ def lth_args_parser():
     parser.add_argument('--split_dataset_ratio', type=list, default=[0.4, 0.3, 0.3],
                         help="ratio of non-iid split for creditcard dataset")
 
-    parser.add_argument("--momentum", type=float, default=0.5, help="SGD momentum (default: 0.5)")
-    parser.add_argument("--gpu", type=int, default=-1, help="GPU ID, -1 for CPU")
-    parser.add_argument('--verbose', action='store_true', default=True, help="verbose print")
     parser.add_argument("--fed_type", type=int, default=3,
                         help="联邦聚合方式  1-FedAVG，2-FedMEAN，3-FedRWA, 4-FedProx, 5-Moon")
     parser.add_argument("--risk_type", type=int, default=3,
