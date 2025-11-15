@@ -201,7 +201,9 @@ def fedselect_algorithm(
 
     # 开始联邦学习
     for round_num in range(com_rounds):
+        print(f"=== Training Round {round_num+1}/{com_rounds} ===")
         round_loss = 0
+        
         
         # 用于风险加权聚合的变量
         client_param_updates = {}  # 存储每个客户端的参数更新
