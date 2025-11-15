@@ -224,7 +224,7 @@ def fedselect_algorithm(
                 args,
             )
 
-            # 本地更新 LTN_i
+            # 获取前轮的掩码
             client_mask = client_masks_prev.get(i)
             # 本地更新 u_i 参数（0 为全局，1 为本地）
             client_model, loss = train_personalized(model, ldr_train, client_mask, args)
@@ -315,7 +315,11 @@ def fedselect_algorithm(
             client_state_dicts[i] = copy.deepcopy(client_model.state_dict())
             client_masks[i] = copy.deepcopy(client_mask)
 
-            if round_num % lth_iters == 0 and round_num != 0:
+            # 只有在 FedSelect 模式（fed_type=0）下才更新 mask
+            # FedAVG/FedMEAN/FedRWA 模式下 mask 保持全 0（所有参数都是全局参数）
+            fed_type = getattr(args, 'fed_type', 0)
+            if fed_type == 0 and round_num % lth_iters == 0 and round_num != 0:
+                #更新select掩码与全局-本地变化值
                 client_mask, delta_tensor_dict = delta_update(
                     prune_rate,
                     client_state_dicts[i],
