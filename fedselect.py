@@ -17,7 +17,7 @@ from broadcast import (
     broadcast_server_to_client_initialization,
     div_server_weights,
     add_masks,
-    add_server_weights,
+    add_server_weights, FusionModule,
 )
 import random
 from torchvision.models import resnet18
@@ -128,20 +128,20 @@ def train_personalized(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     criterion = nn.CrossEntropyLoss()
     train_loss = 0
-    with tqdm(total=epochs) as pbar:
-        for i in range(epochs):
-            train_loss = local_alt(
-                model,
-                criterion,
-                optimizer,
-                ldr_train,
-                device,
-                clip_grad_norm=args.clipgradnorm,
-            )
-            if verbose:
-                print(f"Epoch: {i} \tLoss: {train_loss}")
-            pbar.update(1)
-            pbar.set_postfix({"Loss": train_loss})
+    # with tqdm(total=epochs) as pbar:
+    for i in range(epochs):
+        train_loss = local_alt(
+            model,
+            criterion,
+            optimizer,
+            ldr_train,
+            device,
+            clip_grad_norm=args.clipgradnorm,
+        )
+        if verbose:
+            print(f"Epoch: {i} \tLoss: {train_loss}")
+        # pbar.update(1)
+        # pbar.set_postfix({"Loss": train_loss})
     return model, train_loss
 
 
@@ -197,7 +197,7 @@ def fedselect_algorithm(
     hypernet_optimizer = torch.optim.Adam(hypernet.parameters(), lr=1e-3)
     criterion = nn.CrossEntropyLoss()
     client_old_data = {}
-    # client_delta_tensors = {i: None for i in idxs_users}
+    client_delta_tensors = {i: None for i in idxs_users}
 
     # 开始联邦学习
     for round_num in range(com_rounds):
@@ -332,10 +332,10 @@ def fedselect_algorithm(
                 )
                 client_state_dict_prev[i] = copy.deepcopy(client_state_dicts[i])
                 client_masks_prev[i] = copy.deepcopy(client_mask)
-                # client_delta_tensors[i] = copy.deepcopy(delta_tensor_dict)
+                client_delta_tensors[i] = copy.deepcopy(delta_tensor_dict)
 
         round_loss /= len(idxs_users)
-        cross_client_acc = cross_client_eval(
+        cross_client_acc, aggregated_metrics = cross_client_eval(
             model,
             client_state_dicts,
             dataset_train,
@@ -348,7 +348,13 @@ def fedselect_algorithm(
         accs = torch.diag(cross_client_acc)
         for i in range(len(accs)):
             client_accuracies[round_num][i] = accs[i]
+        # 打印聚合后的指标
         print("Client Accs: ", accs, " | Mean: ", accs.mean())
+        print(f"\n📊 Round {round_num+1} Aggregated Metrics:")
+        print(f"  Total Confusion Matrix:\n{aggregated_metrics['total_cm']}")
+        print(f"  Aggregated Recall: {aggregated_metrics['aggregated_recall']:.4f}")
+        print(f"  Aggregated F1:     {aggregated_metrics['aggregated_f1']:.4f}")
+        print(f"  Average AUC:       {aggregated_metrics['avg_auc']:.4f}\n")
 
         if round_num < com_rounds - 1:
             # 选择聚合算法
@@ -356,7 +362,7 @@ def fedselect_algorithm(
             
             if fed_type in [1, 2, 3] and hasattr(args, 'dataset') and args.dataset == 'creditcard':
                 # 使用新的聚合算法（FedAVG, FedMEAN, FedRWA）
-                print(f"使用聚合算法类型: {fed_type} ({'FedAVG' if fed_type == 1 else 'FedMEAN' if fed_type == 2 else 'FedRWA'})")
+                print(f"使用聚合算法类型: {fed_type} ({'FedAVG' if fed_type == 1 else 'FedMEAN' if fed_type == 2 else 'FedSelect' if fed_type == 0 else 'FedRWA'})")
                 
                 # 准备聚合所需的数据
                 dw_list = [client_param_updates[i] for i in idxs_users]
@@ -403,14 +409,15 @@ def fedselect_algorithm(
                 # 服务器将非 Lottery Ticket 的参数广播到每个设备
                 print(f"round_num is {round_num}")
                 for i in idxs_users:
+                    fushion_module = FusionModule(client_state_dicts[i], client_delta_tensors[i])
                     client_state_dicts[i] = broadcast_server_to_client_initialization(
-                        server_weights, client_masks[i], client_state_dicts[i]
+                        server_weights, client_masks[i], client_state_dicts[i], client_delta_tensors[i], fusion_module=fushion_module
                     )
             
             server_accumulate_mask = OrderedDict()
             server_weights = OrderedDict()
 
-    cross_client_acc = cross_client_eval(
+    cross_client_acc, _ = cross_client_eval(
         model,
         client_state_dicts,
         dataset_train,
@@ -442,14 +449,27 @@ def cross_client_eval(
         dict_users_test: Dict[int, np.ndarray],
         args: Any,
         no_cross: bool = True,
-) -> torch.Tensor:
+) -> Tuple[torch.Tensor, Dict[str, Any]]:
     """
     跨客户端评估模型，并在评估每个客户端自身数据时打印详细指标。
+    
+    返回:
+        cross_client_acc_matrix: 准确率矩阵
+        aggregated_metrics: 聚合后的指标字典，包含：
+            - total_cm: 总体混淆矩阵（所有客户端累加）
+            - avg_auc: 平均 AUC
+            - aggregated_recall: 基于总体混淆矩阵计算的召回率
+            - aggregated_f1: 基于总体混淆矩阵计算的 F1
     """
     cross_client_acc_matrix = torch.zeros(
         (len(client_state_dicts), len(client_state_dicts))
     )
     idx_users = list(client_state_dicts.keys())
+    
+    # 用于聚合指标
+    total_cm = np.zeros((2, 2))  # 累加所有客户端的混淆矩阵
+    auc_list = []  # 收集所有客户端的 AUC
+    
     for _i, i in enumerate(idx_users):
         model.load_state_dict(client_state_dicts[i])
         for _j, j in enumerate(idx_users):
@@ -468,14 +488,19 @@ def cross_client_eval(
 
             # 如果某个客户端没有测试数据，则跳过
             if len(ldr_test.dataset) == 0:
-                metrics = {'accuracy': 0.0}
+                metrics = {'accuracy': 0.0, 'cm': np.zeros((2, 2)), 'auc': 0.0}
             else:
                 # 调用新的evaluate函数获取所有指标
                 metrics = evaluate(model, ldr_test, args)
 
-            # 当客户端在自己的测试集上评估时，打印详细信息
+            # 当客户端在自己的测试集上评估时，打印详细信息并收集指标
             if i == j:
-                cm = metrics.get('cm', np.array([['N/A', 'N/A'], ['N/A', 'N/A']]))
+                cm = metrics.get('cm', np.array([[0, 0], [0, 0]]))
+                # 累加混淆矩阵
+                total_cm += cm
+                # 收集 AUC
+                auc_list.append(metrics.get('auc', 0.0))
+                
                 # 将numpy数组格式化为单行字符串以便打印
                 cm_str = np.array2string(cm, separator=', ').replace('\n', '')
                 print(f"Client_{_i} test results -> cm: {cm_str}")
@@ -486,8 +511,22 @@ def cross_client_eval(
 
             # 将准确率存入矩阵
             cross_client_acc_matrix[_i, _j] = metrics['accuracy']
+    
+    # 基于总体混淆矩阵计算聚合的 Recall 和 F1
+    tn, fp, fn, tp = total_cm.ravel()
+    aggregated_recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    aggregated_precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    aggregated_f1 = 2 * (aggregated_precision * aggregated_recall) / (aggregated_precision + aggregated_recall) if (aggregated_precision + aggregated_recall) > 0 else 0.0
+    avg_auc = np.mean(auc_list) if len(auc_list) > 0 else 0.0
+    
+    aggregated_metrics = {
+        'total_cm': total_cm,
+        'aggregated_recall': aggregated_recall,
+        'aggregated_f1': aggregated_f1,
+        'avg_auc': avg_auc
+    }
 
-    return cross_client_acc_matrix
+    return cross_client_acc_matrix, aggregated_metrics
 
 
 def get_cross_correlation(A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:

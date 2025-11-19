@@ -28,7 +28,7 @@ def lth_args_parser():
     parser.add_argument("--prune_target", default=80, type=int, help="Pruning target")
     parser.add_argument(
         # "--com_rounds", type=int, default=4, help="rounds of fedavg training"
-        "--com_rounds", type=int, default=20, help="rounds of fedavg training"
+        "--com_rounds", type=int, default=100, help="rounds of fedavg training"
     )
     parser.add_argument(
         "--la_epochs",
@@ -71,7 +71,7 @@ def lth_args_parser():
     parser.add_argument('--split_dataset_ratio', type=list, default=[0.4, 0.3, 0.3],
                         help="ratio of non-iid split for creditcard dataset")
 
-    parser.add_argument("--fed_type", type=int, default=1,
+    parser.add_argument("--fed_type", type=int, default=0,
                         help="联邦聚合方式  0-FedSelect 1-FedAVG，2-FedMEAN，3-FedRWA, 4-FedProx, 5-Moon")
     parser.add_argument("--risk_type", type=int, default=3,
                         help="风险权值类型   1-数据集大小，2-数据集欺诈样本数量，3-数据集欺诈样本金额")
