@@ -9,6 +9,7 @@ from torch import nn, optim
 from torch.utils.data import DataLoader, Dataset
 
 
+# 目前无用
 class LocalUpdate:
     """
     LocalUpdate encapsulates client-side training.
@@ -62,6 +63,6 @@ class LocalUpdate:
             avg = batch_loss / (batch_idx + 1) if (batch_idx + 1) > 0 else 0.0
             epoch_loss.append(avg)
             if self.verbose:
-                print(f"[Local] epoch {epoch+1}/{self.local_epochs} loss {avg:.4f}")
+                print(f"[Local] epoch {epoch + 1}/{self.local_epochs} loss {avg:.4f}")
         # return local model parameters and average loss
         return net.cpu().state_dict(), float(sum(epoch_loss) / max(len(epoch_loss), 1))
