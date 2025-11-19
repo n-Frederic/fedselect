@@ -260,51 +260,51 @@ def fedselect_algorithm(
             #     client_sample_nums[i] = len(dict_users_train[i])
             #     client_accuracies_dict[i] = 1.0 / (1.0 + loss)
             #     client_risk_scores[i] = float(len(dict_users_train[i]))
-            
 
-            # try:
-            #     batch = next(iter(ldr_train))
-            # except StopIteration:
-            #     batch = None
-            #
-            # if batch is not None:
-            #     # 假设 batch 是 (inputs, labels)
-            #     batch_x = batch[0].to(args.device)
-            #     # 展平（如果输入已经是向量可以跳过）
-            #     batch_x = batch_x.view(batch_x.size(0), -1)  # (N, 29)
-            #     batch_y = batch[1].to(args.device)
-            #     # 获取旧的 batch（第0轮没有旧数据）
-            #     if round_num == 0 or (i not in client_old_data):
-            #         old_batch = batch_x.clone()
-            #     else:
-            #         old_batch = client_old_data[i]
-            #
-            #     # 保存本轮 batch 供下一轮比较
-            #     client_old_data[i] = batch_x.clone()
-            #
-            #     # 漂移检测
-            #     drift_flag, mean_diff, std_diff = drift_detect(old_batch, batch_x, threshold=0.05)
-            #
-            #     if drift_flag:
-            #         delta_vec, applied_w_delta, applied_b_delta = apply_hypernet_delta(
-            #             client_model=client_model,
-            #             hypernet=hypernet,
-            #             mean_diff=mean_diff,
-            #             std_diff=std_diff,
-            #             drift_flag=drift_flag,
-            #             scale=0.01,
-            #             clip_val_w=1.0,
-            #             clip_val_b=0.1,
-            #             train_hypernet=True,
-            #             criterion=criterion,
-            #             batch_x=batch_x.to(args.device),
-            #             batch_y=batch_y.to(args.device),
-            #             optimizer=hypernet_optimizer,
-            #             device=args.device
-            #         )
-            #
-            #         print(
-            #             f"[Round {round_num}] Client {i}: Δw.norm={applied_w_delta.norm():.4f}, bias Δ.norm={(applied_b_delta.norm() if applied_b_delta is not None else 0):.4f}")
+            # 应用超网络
+            try:
+                batch = next(iter(ldr_train))
+            except StopIteration:
+                batch = None
+
+            if batch is not None:
+                # 假设 batch 是 (inputs, labels)
+                batch_x = batch[0].to(args.device)
+                # 展平（如果输入已经是向量可以跳过）
+                batch_x = batch_x.view(batch_x.size(0), -1)  # (N, 29)
+                batch_y = batch[1].to(args.device)
+                # 获取旧的 batch（第0轮没有旧数据）
+                if round_num == 0 or (i not in client_old_data):
+                    old_batch = batch_x.clone()
+                else:
+                    old_batch = client_old_data[i]
+
+                # 保存本轮 batch 供下一轮比较
+                client_old_data[i] = batch_x.clone()
+
+                # 漂移检测
+                drift_flag, mean_diff, std_diff = drift_detect(old_batch, batch_x, threshold=0.05)
+
+                if drift_flag:
+                    delta_vec, applied_w_delta, applied_b_delta = apply_hypernet_delta(
+                        client_model=client_model,
+                        hypernet=hypernet,
+                        mean_diff=mean_diff,
+                        std_diff=std_diff,
+                        drift_flag=drift_flag,
+                        scale=0.01,
+                        clip_val_w=1.0,
+                        clip_val_b=0.1,
+                        train_hypernet=True,
+                        criterion=criterion,
+                        batch_x=batch_x.to(args.device),
+                        batch_y=batch_y.to(args.device),
+                        optimizer=hypernet_optimizer,
+                        device=args.device
+                    )
+
+                    print(
+                        f"[Round {round_num}] Client {i}: Δw.norm={applied_w_delta.norm():.4f}, bias Δ.norm={(applied_b_delta.norm() if applied_b_delta is not None else 0):.4f}")
 
             # 发送 u_i 更新给服务器
             if round_num < com_rounds - 1:
@@ -452,6 +452,11 @@ def cross_client_eval(
     cross_client_acc_matrix = torch.zeros(
         (len(client_state_dicts), len(client_state_dicts))
     )
+
+    global_TP = 0
+    global_FN = 0
+    global_P = 0
+
     idx_users = list(client_state_dicts.keys())
     for _i, i in enumerate(idx_users):
         model.load_state_dict(client_state_dicts[i])
@@ -479,6 +484,12 @@ def cross_client_eval(
             # 当客户端在自己的测试集上评估时，打印详细信息
             if i == j:
                 cm = metrics.get('cm', np.array([['N/A', 'N/A'], ['N/A', 'N/A']]))
+                if cm is not None and cm.shape == (2, 2):
+                    tn, fp, fn, tp = cm.ravel()
+                    global_TP += tp
+                    global_FN += fn
+                    global_P += (tp + fn)
+
                 # 将numpy数组格式化为单行字符串以便打印
                 cm_str = np.array2string(cm, separator=', ').replace('\n', '')
                 print(f"Client_{_i} test results -> cm: {cm_str}")
@@ -489,6 +500,18 @@ def cross_client_eval(
 
             # 将准确率存入矩阵
             cross_client_acc_matrix[_i, _j] = metrics['accuracy']
+
+            print("Evaluation test label distribution for client", j)
+            test_labels = [lbl for _, lbl in ldr_test.dataset]
+            print("Positive:", sum(test_labels), "Negative:", len(test_labels) - sum(test_labels))
+
+    if global_P > 0:
+        global_recall = global_TP / global_P
+    else:
+        global_recall = 0.0
+    print(f"\n==== Global Recall (All Clients Combined) ====\n"
+          f"TP = {global_TP}, FN = {global_FN}, Total Pos = {global_P}\n"
+          f"Global Recall = {global_recall:.4f}\n")
 
     return cross_client_acc_matrix
 

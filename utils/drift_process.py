@@ -98,19 +98,19 @@ def apply_hypernet_delta(
     applied_w_delta = w_delta.clone()
     applied_b_delta = b_delta.clone() if b_delta is not None else None
 
-    # ===== Debug 信息 =====
-    print("\n========== DEBUG Δw BEGIN ==========")
-    print(f"[DEBUG-DELTA] z.shape = {z.shape}, z.norm = {z.norm().item():.4f}")
-    print(f"[DEBUG-DELTA] delta_vec.shape = {delta_vec.shape}, delta_vec.norm = {delta_vec.norm().item():.4f}")
-    print(f"[DEBUG-DELTA] w_delta.shape = {w_delta.shape}, w_delta.norm = {w_delta.norm().item():.4f}")
-    print(f"[DEBUG-DELTA] w_delta[:10] = {w_delta[:10].detach().cpu().numpy()}")
-    if applied_b_delta is not None:
-        print(f"[DEBUG-DELTA] b_delta.shape = {b_delta.shape}, b_delta.norm = {b_delta.norm().item():.4f}")
-        print(f"[DEBUG-DELTA] b_delta[:10] = {b_delta[:10].detach().cpu().numpy()}")
-    print(f"[DEBUG-DELTA] last_layer.weight.norm = {last_layer.weight.norm().item():.4f}")
-    if last_layer.bias is not None:
-        print(f"[DEBUG-DELTA] last_layer.bias.norm = {last_layer.bias.norm().item():.4f}")
-    print("========== DEBUG Δw END ==========\n")
+    # # ===== Debug 信息 =====
+    # print("\n========== DEBUG Δw BEGIN ==========")
+    # print(f"[DEBUG-DELTA] z.shape = {z.shape}, z.norm = {z.norm().item():.4f}")
+    # print(f"[DEBUG-DELTA] delta_vec.shape = {delta_vec.shape}, delta_vec.norm = {delta_vec.norm().item():.4f}")
+    # print(f"[DEBUG-DELTA] w_delta.shape = {w_delta.shape}, w_delta.norm = {w_delta.norm().item():.4f}")
+    # print(f"[DEBUG-DELTA] w_delta[:10] = {w_delta[:10].detach().cpu().numpy()}")
+    # if applied_b_delta is not None:
+    #     print(f"[DEBUG-DELTA] b_delta.shape = {b_delta.shape}, b_delta.norm = {b_delta.norm().item():.4f}")
+    #     print(f"[DEBUG-DELTA] b_delta[:10] = {b_delta[:10].detach().cpu().numpy()}")
+    # print(f"[DEBUG-DELTA] last_layer.weight.norm = {last_layer.weight.norm().item():.4f}")
+    # if last_layer.bias is not None:
+    #     print(f"[DEBUG-DELTA] last_layer.bias.norm = {last_layer.bias.norm().item():.4f}")
+    # print("========== DEBUG Δw END ==========\n")
 
     # ===== 可选训练超网络 =====
     if train_hypernet and batch_x is not None and batch_y is not None and criterion is not None and optimizer is not None:
