@@ -1,6 +1,6 @@
 from torchvision import datasets, transforms
 from utils.sampling import iid, noniid, creditcard_iid, creditcard_noniid
-from utils.dataprocess import DatasetFromCSV
+from utils.dataprocess import DatasetFromCSV, DatasetBalance
 import numpy as np
 import torch
 import pandas as pd
@@ -160,7 +160,7 @@ def prepare_dataloaders(
     dict_users_test: Dict,
     args: Any,
 ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
-    """为某个用户构建训练集和测试集的 DataLoader。
+    """为某个用户构建训练集和测试集的 DataLoader，并对训练集做平衡处理。
 
     参数:
         dataset_train: 全局训练数据集
@@ -170,19 +170,23 @@ def prepare_dataloaders(
         args: 包含 batch 大小等配置的参数
 
     返回:
-        ldr_train: 用户的训练 DataLoader
+        ldr_train: 用户的训练 DataLoader（平衡过）
         ldr_test: 用户的测试 DataLoader
     """
+    # 使用 DatasetBalance 对训练集进行平衡处理
     ldr_train = torch.utils.data.DataLoader(
-        DatasetSplit(dataset_train, dict_users_train),
+        DatasetBalance(dataset_train.data.loc[dict_users_train]),
         batch_size=args.local_bs,
         shuffle=True,
     )
+
+    # 测试集保持原始分布
     ldr_test = torch.utils.data.DataLoader(
         DatasetSplit(dataset_test, dict_users_test),
         batch_size=args.local_bs,
         shuffle=False,
     )
+
     return ldr_train, ldr_test
 
 
