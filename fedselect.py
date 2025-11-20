@@ -308,7 +308,7 @@ def fedselect_algorithm(
             #         print(
             #             f"[Round {round_num}] Client {i}: Δw.norm={applied_w_delta.norm():.4f}, bias Δ.norm={(applied_b_delta.norm() if applied_b_delta is not None else 0):.4f}")
 
-            # 发送 u_i 更新给服务器
+            # 发送 u_i 更新给服务器，更新每个参数作为全局的客户端数量和总参数值
             if round_num < com_rounds - 1:
                 server_accumulate_mask = add_masks(server_accumulate_mask, client_mask)
                 server_weights = add_server_weights(
