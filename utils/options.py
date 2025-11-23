@@ -4,8 +4,8 @@ import argparse
 def lth_args_parser():
     parser = argparse.ArgumentParser()
     # parser.add_argument("--lr", default=0.05, type=float, help="Learning rate")
-    parser.add_argument("--lr", default=0.002, type=float, help="Learning rate")
-    parser.add_argument("--batch_size", default=60, type=int)
+    parser.add_argument("--lr", default=0.01, type=float, help="Learning rate")
+    parser.add_argument("--batch_size", default=128, type=int)
     parser.add_argument("--lth_epoch_iters", default=3, type=int)
     parser.add_argument(
         "--dataset",
@@ -33,7 +33,7 @@ def lth_args_parser():
     parser.add_argument(
         "--la_epochs",
         type=int,
-        default=15,
+        default=10,
         help="rounds of training for local alt optimization",
     )
     parser.add_argument("--iid", action="store_true",default=True, help="whether i.i.d or not")
@@ -41,7 +41,7 @@ def lth_args_parser():
     parser.add_argument(
         "--shard_per_user", type=int, default=2, help="classes per user"
     )
-    parser.add_argument("--local_bs", type=int, default=32, help="local batch size: B")
+    parser.add_argument("--local_bs", type=int, default=128, help="local batch size: B")
     parser.add_argument(
         # "--frac", type=float, default=0.1, help="the fraction of clients: C"
         "--frac", type=float, default=0.5, help="the fraction of clients: C"
