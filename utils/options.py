@@ -43,9 +43,7 @@ def lth_args_parser():
     )
     parser.add_argument("--local_bs", type=int, default=128, help="local batch size: B")
     parser.add_argument(
-        # "--frac", type=float, default=0.1, help="the fraction of clients: C"
         "--frac", type=float, default=0.5, help="the fraction of clients: C"
-
     )
     parser.add_argument("--num_classes", type=int, default=10, help="number of classes")
     parser.add_argument("--model", type=str, default="mlp", help="model name")
@@ -75,5 +73,6 @@ def lth_args_parser():
                         help="联邦聚合方式  0-FedSelect 1-FedAVG，2-FedMEAN，3-FedRWA, 4-FedProx, 5-Moon")
     parser.add_argument("--risk_type", type=int, default=3,
                         help="风险权值类型   1-数据集大小，2-数据集欺诈样本数量，3-数据集欺诈样本金额")
+    parser.add_argument("--optimizer", type=str, default="MaskLocalAltSGD")
     args = parser.parse_args()
     return args
