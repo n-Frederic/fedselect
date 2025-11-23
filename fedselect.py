@@ -141,7 +141,7 @@ def fedselect_algorithm(
     dict_users_train: Dict[int, np.ndarray],
     dict_users_test: Dict[int, np.ndarray],
     labels: np.ndarray,
-    idxs_users: List[int],
+    all_users: List[int]
 ) -> Dict[str, Any]:
     """FedSelect 联邦学习主算法。
 
@@ -153,7 +153,7 @@ def fedselect_algorithm(
         dict_users_train: 用户到训练数据索引的映射
         dict_users_test: 用户到测试数据索引的映射
         labels: 数据标签
-        idxs_users: 用户 ID 列表
+        all_users: 所有用户 ID 列表
 
     返回:
         字典，包含：
@@ -168,11 +168,12 @@ def fedselect_algorithm(
     initial_state_dict = copy.deepcopy(model.state_dict())
     com_rounds = args.com_rounds
     # 初始化服务器
-    client_accuracies = [{i: 0 for i in idxs_users} for _ in range(com_rounds)]
-    client_state_dicts = {i: copy.deepcopy(initial_state_dict) for i in idxs_users}
-    client_state_dict_prev = {i: copy.deepcopy(initial_state_dict) for i in idxs_users}
-    client_masks = {i: None for i in idxs_users}
-    client_masks_prev = {i: init_mask_zeros(model) for i in idxs_users}
+    client_accuracies = [{i: 0 for i in all_users} for _ in range(com_rounds)]
+    global_state_dict = copy.deepcopy(initial_state_dict)
+    client_state_dicts = {i: copy.deepcopy(initial_state_dict) for i in all_users}
+    client_state_dict_prev = {i: copy.deepcopy(initial_state_dict) for i in all_users}
+    client_masks = {i: None for i in all_users}
+    client_masks_prev = {i: init_mask_zeros(model) for i in all_users}
     server_accumulate_mask = OrderedDict()
     server_weights = OrderedDict()
     lth_iters = args.lth_epoch_iters
@@ -185,7 +186,7 @@ def fedselect_algorithm(
     hypernet_optimizer = torch.optim.Adam(hypernet.parameters(), lr=1e-3)
     criterion = nn.CrossEntropyLoss()
     client_old_data = {}
-    client_delta_tensors = {i: None for i in idxs_users}
+    client_delta_tensors = {i: None for i in all_users}
 
     # 开始联邦学习
     for round_num in range(com_rounds):
@@ -198,6 +199,8 @@ def fedselect_algorithm(
         client_sample_nums = {}  # 存储每个客户端的样本数量
         client_accuracies_dict = {}  # 存储每个客户端的准确率
         client_risk_scores = {}  # 存储每个客户端的风险分数
+        m = max(int(args.frac * args.num_users), 1)
+        idxs_users = np.random.choice(range(args.num_users), m, replace=False)
         
         for i in idxs_users:
             # 保存训练前的状态（用于计算参数更新）
@@ -304,7 +307,6 @@ def fedselect_algorithm(
                 )
             client_state_dicts[i] = copy.deepcopy(client_model.state_dict())
             client_masks[i] = copy.deepcopy(client_mask)
-
             # 只有在 FedSelect 模式（fed_type=0）下才更新 mask
             # FedAVG/FedMEAN/FedRWA 模式下 mask 保持全 0（所有参数都是全局参数）
             fed_type = getattr(args, 'fed_type', 0)
@@ -364,36 +366,38 @@ def fedselect_algorithm(
                 # 执行聚合
                 if fed_type == 1:
                     # FedAVG: 基于样本数量加权
-                    aggregated_state = FedAVG(reference_state, dw_list, sample_nums)
+                    global_state_dict = FedAVG(reference_state, dw_list, sample_nums)
+
                 elif fed_type == 2:
                     # FedMEAN: 简单平均
-                    aggregated_state = FedMEAN(reference_state, dw_list)
+                    global_state_dict = FedMEAN(reference_state, dw_list)
                 elif fed_type == 3:
                     # FedRWA: 风险加权
                     print(f"风险分数: {risk_scores}")
-                    aggregated_state = FedRWA(reference_state, dw_list, accuracies, risk_scores)
+                    global_state_dict = FedRWA(reference_state, dw_list, accuracies, risk_scores)
                 
                 # 将聚合后的参数广播到所有客户端
                 for i in idxs_users:
                     # 应用 mask：只更新非本地参数（mask==0 的部分）
-                    for key in aggregated_state.keys():
+                    for key in global_state_dict.keys():
                         if "weight" in key or "bias" in key:
                             if client_masks[i] is not None and key in client_masks[i]:
                                 # 只在 mask 为 0（全局参数）的位置更新
                                 client_state_dicts[i][key] = torch.where(
                                     client_masks[i][key] == 0,
-                                    aggregated_state[key],
+                                    global_state_dict[key],
                                     client_state_dicts[i][key]
                                 )
                             else:
                                 # 如果没有 mask，直接使用聚合后的参数
-                                client_state_dicts[i][key] = aggregated_state[key]
+                                client_state_dicts[i][key] = global_state_dict[key]
                         else:
                             # 其他参数（如 BN 的 running_mean 等）直接复制
-                            client_state_dicts[i][key] = aggregated_state[key]
+                            client_state_dicts[i][key] = global_state_dict[key]
             else:
                 # 使用原始的聚合方法（FedSelect 默认方法）
                 server_weights = div_server_weights(server_weights, server_accumulate_mask)
+                global_state_dict = copy.deepcopy(global_state_dict)
                 # 服务器将非 Lottery Ticket 的参数广播到每个设备
                 print(f"round_num is {round_num}")
                 for i in idxs_users:
@@ -553,10 +557,7 @@ def run_base_experiment(model: nn.Module, args: Any) -> None:
         args
     )
 
-    idxs_users = np.arange(args.num_users * args.frac)
-    m = max(int(args.frac * args.num_users), 1)
-    idxs_users = np.random.choice(range(args.num_users), m, replace=False)
-    idxs_users = [int(i) for i in idxs_users]
+    all_users = np.arange(args.num_users)
     fedselect_algorithm(
         model,
         args,
@@ -565,7 +566,7 @@ def run_base_experiment(model: nn.Module, args: Any) -> None:
         dict_users_train,
         dict_users_test,
         labels,
-        idxs_users,
+        all_users
     )
 
 
