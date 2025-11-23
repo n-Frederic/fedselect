@@ -27,21 +27,15 @@ from utils.train_utils import get_client_fraud_stats
 from models.hypernetwork import HyperNetwork
 
 
-from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score, roc_auc_score, \
+    average_precision_score
+
 
 def evaluate(
-    model: nn.Module, ldr_test: torch.utils.data.DataLoader, args: Any
+    model: nn.Module, ldr_test: torch.utils.data.DataLoader
 ) -> Dict[str, Any]:
     """
-    在测试数据集上评估模型，并返回包括混淆矩阵、F1、召回率等在内的多种指标。
-
-    参数:
-        model: 要评估的神经网络模型
-        ldr_test: 测试集 DataLoader
-        args: 包含设备信息的参数
-
-    返回:
-        一个包含多种评估指标的字典
+    在测试数据集上评估模型，并返回包括混淆矩阵、F1、召回率、PR-AUC 等在内的多种指标。
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
@@ -54,41 +48,35 @@ def evaluate(
             data, target = data.to(device), target.to(device)
             output = model(data)
 
-            # 获取预测为正类(类别1)的概率，用于计算AUC
-            probs = F.softmax(output, dim=1)[:, 1]
-            # 获取预测的类别
+            probs = F.softmax(output, dim=1)[:, 1]   # positive class probability
             preds = output.argmax(dim=1)
 
             all_targets.extend(target.cpu().numpy())
             all_preds.extend(preds.cpu().numpy())
             all_probs.extend(probs.cpu().numpy())
 
-    # 将列表转换为numpy数组以便于计算
     all_targets = np.array(all_targets)
     all_preds = np.array(all_preds)
     all_probs = np.array(all_probs)
 
     metrics = {}
     try:
-        # 计算混淆矩阵
         cm = confusion_matrix(all_targets, all_preds)
-        # 从混淆矩阵中提取 TN, FP, FN, TP
         tn, fp, fn, tp = cm.ravel()
 
         metrics['cm'] = cm
         metrics['accuracy'] = (tp + tn) / (tp + tn + fp + fn)
-        # zero_division=0 防止在某些批次中没有正样本时出现警告
         metrics['precision'] = precision_score(all_targets, all_preds, zero_division=0)
         metrics['recall'] = recall_score(all_targets, all_preds, zero_division=0)
         metrics['f1'] = f1_score(all_targets, all_preds, zero_division=0)
         metrics['tnr'] = tn / (tn + fp) if (tn + fp) > 0 else 0.0
         metrics['auc'] = roc_auc_score(all_targets, all_probs)
+        metrics['pr_auc'] = average_precision_score(all_targets, all_probs)
 
     except ValueError:
-        # 如果测试集为空或只包含一个类别，则指标计算可能会失败
         print("警告: 无法计算指标，数据集可能为空或只包含一个类别。")
-        # 返回默认值
-        default_metrics = {k: 0.0 for k in ['accuracy', 'precision', 'recall', 'f1', 'tnr', 'auc']}
+        default_metrics = {k: 0.0 for k in
+                           ['accuracy','precision','recall','f1','tnr','auc','pr_auc']}
         default_metrics['cm'] = np.zeros((2, 2))
         return default_metrics
 
@@ -469,7 +457,8 @@ def cross_client_eval(
     # 用于聚合指标
     total_cm = np.zeros((2, 2))  # 累加所有客户端的混淆矩阵
     auc_list = []  # 收集所有客户端的 AUC
-    
+    pr_auc_list = []
+
     for _i, i in enumerate(idx_users):
         model.load_state_dict(client_state_dicts[i])
         for _j, j in enumerate(idx_users):
@@ -491,7 +480,7 @@ def cross_client_eval(
                 metrics = {'accuracy': 0.0, 'cm': np.zeros((2, 2)), 'auc': 0.0}
             else:
                 # 调用新的evaluate函数获取所有指标
-                metrics = evaluate(model, ldr_test, args)
+                metrics = evaluate(model, ldr_test)
 
             # 当客户端在自己的测试集上评估时，打印详细信息并收集指标
             if i == j:
@@ -500,14 +489,18 @@ def cross_client_eval(
                 total_cm += cm
                 # 收集 AUC
                 auc_list.append(metrics.get('auc', 0.0))
-                
+
+                pr_auc_list.append(metrics.get('pr_auc', 0.0))
+
                 # 将numpy数组格式化为单行字符串以便打印
                 cm_str = np.array2string(cm, separator=', ').replace('\n', '')
                 print(f"Client_{_i} test results -> cm: {cm_str}")
                 print(f"  └─> Accuracy: {metrics.get('accuracy', 0.0):.4f}, "
+                      f"Precision: {metrics.get('precision', 0.0):.4f}, "
                       f"Recall: {metrics.get('recall', 0.0):.4f}, "
                       f"F1: {metrics.get('f1', 0.0):.4f}, "
-                      f"AUC: {metrics.get('auc', 0.0):.4f}")
+                      f"AUC: {metrics.get('auc', 0.0):.4f}, "
+                      f"PR-AUC: {metrics.get('pr_auc', 0.0):.4f}")
 
             # 将准确率存入矩阵
             cross_client_acc_matrix[_i, _j] = metrics['accuracy']
@@ -518,12 +511,13 @@ def cross_client_eval(
     aggregated_precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     aggregated_f1 = 2 * (aggregated_precision * aggregated_recall) / (aggregated_precision + aggregated_recall) if (aggregated_precision + aggregated_recall) > 0 else 0.0
     avg_auc = np.mean(auc_list) if len(auc_list) > 0 else 0.0
-    
+
     aggregated_metrics = {
         'total_cm': total_cm,
         'aggregated_recall': aggregated_recall,
         'aggregated_f1': aggregated_f1,
-        'avg_auc': avg_auc
+        'avg_auc': avg_auc,
+        'avg_pr_auc': np.mean(pr_auc_list) if len(pr_auc_list) > 0 else 0.0
     }
 
     return cross_client_acc_matrix, aggregated_metrics
