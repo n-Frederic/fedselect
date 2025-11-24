@@ -36,7 +36,7 @@ def lth_args_parser():
         default=10,
         help="rounds of training for local alt optimization",
     )
-    parser.add_argument("--iid", action="store_true",default=True, help="whether i.i.d or not")
+    parser.add_argument("--iid", action="store_true", default=True, help="whether i.i.d or not")
     parser.add_argument("--num_users", type=int, default=20, help="number of users: K")
     parser.add_argument(
         "--shard_per_user", type=int, default=2, help="classes per user"
