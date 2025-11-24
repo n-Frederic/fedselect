@@ -74,5 +74,6 @@ def lth_args_parser():
     parser.add_argument("--risk_type", type=int, default=3,
                         help="风险权值类型   1-数据集大小，2-数据集欺诈样本数量，3-数据集欺诈样本金额")
     parser.add_argument("--optimizer", type=str, default="MaskLocalAltSGD")
+    parser.add_argument("--momentum", type=float, default=0.5)
     args = parser.parse_args()
     return args
