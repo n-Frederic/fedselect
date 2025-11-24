@@ -175,7 +175,7 @@ def prepare_dataloaders(
     """
     # 使用 DatasetBalance 对训练集进行平衡处理
     ldr_train = torch.utils.data.DataLoader(
-        DatasetBalance(dataset_train.data.loc[dict_users_train]),
+        DatasetBalance(dataset_train.data.loc[list(dict_users_train)]),
         batch_size=args.local_bs,
         shuffle=True,
     )
