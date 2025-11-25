@@ -69,11 +69,14 @@ def lth_args_parser():
     parser.add_argument('--split_dataset_ratio', type=list, default=[0.4, 0.3, 0.3],
                         help="ratio of non-iid split for creditcard dataset")
 
-    parser.add_argument("--fed_type", type=int, default=3,
-                        help="联邦聚合方式  0-FedSelect 1-FedAVG，2-FedMEAN，3-FedRWA, 4-FedProx, 5-Moon")
+    parser.add_argument("--local_type", type=int, default=0,
+                        help="0=无mask，1=mask")
+
+    parser.add_argument("--agg_type", type=int, default=0,
+                        help="聚合类型：0=FedAVG，1=FedSelect融合，2=FedRWA")
+
     parser.add_argument("--risk_type", type=int, default=3,
                         help="风险权值类型   1-数据集大小，2-数据集欺诈样本数量，3-数据集欺诈样本金额")
-    parser.add_argument("--optimizer", type=str, default="MaskLocalAltSGD")
     parser.add_argument("--momentum", type=float, default=0.5)
     args = parser.parse_args()
     return args

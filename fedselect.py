@@ -111,7 +111,17 @@ def train_personalized(
     """
     if initialization is not None:
         model.load_state_dict(initialization)
-    optimizer = MaskLocalAltSGD(model.parameters(), mask, lr=args.lr)
+    if args.local_type == 1:
+        optimizer = MaskLocalAltSGD(model.parameters(), mask, lr=args.lr)
+    elif args.local_type == 0:
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.lr,
+            momentum=getattr(args, "momentum", 0.0),
+            weight_decay=getattr(args, "wd", 0.0)  # 若有 wd（L2 正则）则自动读取
+        )
+    else:
+        raise ValueError(f"Unsupported local_type: {args.local_type}")
     epochs = args.la_epochs
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     criterion = nn.CrossEntropyLoss()
@@ -204,7 +214,7 @@ def fedselect_algorithm(
         
         for i in idxs_users:
             # 保存训练前的状态（用于计算参数更新）
-            state_before_training = copy.deepcopy(model.state_dict()) if hasattr(args, 'dataset') and args.dataset == 'creditcard' and getattr(args, 'fed_type', 0) in [1, 2, 3] else None
+            state_before_training = copy.deepcopy(model.state_dict()) if hasattr(args, 'dataset') and args.dataset == 'creditcard' and getattr(args, 'local_type', 0) in [0, 1] else None
             
             # 初始化模型
             model.load_state_dict(client_state_dicts[i])
@@ -309,8 +319,8 @@ def fedselect_algorithm(
             client_masks[i] = copy.deepcopy(client_mask)
             # 只有在 FedSelect 模式（fed_type=0）下才更新 mask
             # FedAVG/FedMEAN/FedRWA 模式下 mask 保持全 0（所有参数都是全局参数）
-            fed_type = getattr(args, 'fed_type', 0)
-            if fed_type == 0 and round_num % lth_iters == 0 and round_num != 0:
+            local_type = getattr(args, 'local_type', 0)
+            if local_type == 1 and round_num % lth_iters == 0 and round_num != 0:
                 #更新select掩码与全局-本地变化值
                 client_mask, delta_tensor_dict = delta_update(
                     prune_rate,
@@ -348,11 +358,11 @@ def fedselect_algorithm(
 
         if round_num < com_rounds - 1:
             # 选择聚合算法
-            fed_type = getattr(args, 'fed_type', 0)  # 默认使用原始方法
+            agg_type = getattr(args, 'agg_type', 0)  # 默认使用原始方法
             
-            if fed_type in [1, 2, 3] and hasattr(args, 'dataset') and args.dataset == 'creditcard':
+            if agg_type in [0, 1, 2] and hasattr(args, 'dataset') and args.dataset == 'creditcard':
                 # 使用新的聚合算法（FedAVG, FedMEAN, FedRWA）
-                print(f"使用聚合算法类型: {fed_type} ({'FedAVG' if fed_type == 1 else 'FedMEAN' if fed_type == 2 else 'FedSelect' if fed_type == 0 else 'FedRWA'})")
+                print(f"使用聚合算法类型: {agg_type} ({'FedAVG' if agg_type == 0 else 'FedSelect' if agg_type == 1 else 'FedRWA'})")
                 
                 # 准备聚合所需的数据
                 dw_list = [client_param_updates[i] for i in idxs_users]
@@ -364,14 +374,13 @@ def fedselect_algorithm(
                 reference_state = client_state_dicts[idxs_users[0]]
                 
                 # 执行聚合
-                if fed_type == 1:
+                if agg_type == 0:
                     # FedAVG: 基于样本数量加权
                     global_state_dict = FedAVG(reference_state, dw_list, sample_nums)
-
-                elif fed_type == 2:
+                elif agg_type == 1:
                     # FedMEAN: 简单平均
                     global_state_dict = FedMEAN(reference_state, dw_list)
-                elif fed_type == 3:
+                elif agg_type == 2:
                     # FedRWA: 风险加权
                     print(f"风险分数: {risk_scores}")
                     global_state_dict = FedRWA(reference_state, dw_list, accuracies, risk_scores)
