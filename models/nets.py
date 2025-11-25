@@ -9,7 +9,7 @@ import torch.nn as nn
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim: int = 29, hidden: int = 120, num_classes: int = 2):
+    def __init__(self, input_dim: int = 29, hidden: int = 200, num_classes: int = 2):
         super().__init__()
         self.net = nn.Sequential(
             nn.Flatten(),
@@ -20,6 +20,7 @@ class MLP(nn.Module):
 
     def forward(self, x):
         return self.net(x)
+
 
 
 class SimpleCNN(nn.Module):

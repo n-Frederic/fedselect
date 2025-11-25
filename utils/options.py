@@ -28,7 +28,7 @@ def lth_args_parser():
     parser.add_argument("--prune_target", default=80, type=int, help="Pruning target")
     parser.add_argument(
         # "--com_rounds", type=int, default=4, help="rounds of fedavg training"
-        "--com_rounds", type=int, default=100, help="rounds of fedavg training"
+        "--com_rounds", type=int, default=200, help="rounds of fedavg training"
     )
     parser.add_argument(
         "--la_epochs",
@@ -45,7 +45,7 @@ def lth_args_parser():
     parser.add_argument(
         "--frac", type=float, default=0.5, help="the fraction of clients: C"
     )
-    parser.add_argument("--num_classes", type=int, default=10, help="number of classes")
+    parser.add_argument("--num_classes", type=int, default=2, help="number of classes")
     parser.add_argument("--model", type=str, default="mlp", help="model name")
     parser.add_argument("--bs", type=int, default=128, help="test batch size")
     parser.add_argument("--lth_freq", type=int, default=1, help="frequency of lth")
