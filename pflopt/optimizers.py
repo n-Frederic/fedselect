@@ -95,5 +95,31 @@ def local_alt(
     return train_loss
 
 
+def local_train_SGD(
+        model,
+        criterion,
+        optimizer,  # 使用SGD
+        data_loader,
+        device,
+        clip_grad_norm=False,
+        max_grad_norm=3.50,
+):
+    avg_loss = 0  # 变量名改为 avg_loss
+    for batch_idx, (data, target) in enumerate(data_loader):
+        data, target = data.to(device), target.to(device)
+        optimizer.zero_grad()
+        output = model(data)
+        loss = criterion(output, target)
+        avg_loss += loss.item()
+        loss.backward()
+        if clip_grad_norm:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+        optimizer.step()
+
+    avg_loss /= len(data_loader)
+
+    train_loss = avg_loss  # 直接返回平均损失
+    return train_loss
+
 if __name__ == "__main__":
     pass

@@ -11,7 +11,7 @@ from utils.drift_process import drift_detect, compute_z, apply_hypernet_delta
 # 自定义库
 from utils.options import lth_args_parser
 from utils.train_utils import prepare_dataloaders, get_data
-from pflopt.optimizers import MaskLocalAltSGD, local_alt
+from pflopt.optimizers import MaskLocalAltSGD, local_alt, local_train_SGD
 from lottery_ticket import init_mask_zeros, delta_update
 from broadcast import (
     broadcast_server_to_client_initialization,
@@ -128,14 +128,24 @@ def train_personalized(
     train_loss = 0
     # with tqdm(total=epochs) as pbar:
     for i in range(epochs):
-        train_loss = local_alt(
-            model,
-            criterion,
-            optimizer,
-            ldr_train,
-            device,
-            clip_grad_norm=args.clipgradnorm,
-        )
+        if args.local_type == 1:
+            train_loss = local_alt(
+                model,
+                criterion,
+                optimizer,
+                ldr_train,
+                device,
+                clip_grad_norm=args.clipgradnorm,
+            )
+        else:
+            train_loss = local_train_SGD(
+                model,
+                criterion,
+                optimizer,
+                ldr_train,
+                device,
+                clip_grad_norm=args.clipgradnorm,
+            )
         if verbose:
             print(f"Epoch: {i} \tLoss: {train_loss}")
         # pbar.update(1)
