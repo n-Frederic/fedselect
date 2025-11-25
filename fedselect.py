@@ -175,6 +175,7 @@ def fedselect_algorithm(
             - lth_convergence: 彩票票据收敛历史
     """
     # 初始化模型
+    torch.save(model.state_dict(), './fed_model-mlp120.pt')
     initial_state_dict = copy.deepcopy(model.state_dict())
     com_rounds = args.com_rounds
     # 初始化服务器
@@ -370,27 +371,24 @@ def fedselect_algorithm(
                 accuracies = [client_accuracies_dict[i] for i in idxs_users]
                 risk_scores = [client_risk_scores[i] for i in idxs_users]
                 
-                # 获取一个参考客户端的状态作为基准
-                reference_state = client_state_dicts[idxs_users[0]]
-                
-                # 执行聚合
+                # 执行聚合（基于上一次全局参数）
                 if agg_type == 0:
                     # FedAVG: 基于样本数量加权
-                    global_state_dict = FedAVG(reference_state, dw_list, sample_nums)
+                    global_state_dict = FedAVG(global_state_dict, dw_list, sample_nums)
                 elif agg_type == 1:
                     # FedMEAN: 简单平均
-                    global_state_dict = FedMEAN(reference_state, dw_list)
+                    global_state_dict = FedMEAN(global_state_dict, dw_list)
                 elif agg_type == 2:
                     # FedRWA: 风险加权
                     print(f"风险分数: {risk_scores}")
-                    global_state_dict = FedRWA(reference_state, dw_list, accuracies, risk_scores)
+                    global_state_dict = FedRWA(global_state_dict, dw_list, accuracies, risk_scores)
                 
                 # 将聚合后的参数广播到所有客户端
                 for i in idxs_users:
                     # 应用 mask：只更新非本地参数（mask==0 的部分）
                     for key in global_state_dict.keys():
                         if "weight" in key or "bias" in key:
-                            if client_masks[i] is not None and key in client_masks[i]:
+                            if client_masks[i] is not None and args.local_type==1 and key in client_masks[i]:
                                 # 只在 mask 为 0（全局参数）的位置更新
                                 client_state_dicts[i][key] = torch.where(
                                     client_masks[i][key] == 0,
@@ -403,17 +401,17 @@ def fedselect_algorithm(
                         else:
                             # 其他参数（如 BN 的 running_mean 等）直接复制
                             client_state_dicts[i][key] = global_state_dict[key]
-            else:
-                # 使用原始的聚合方法（FedSelect 默认方法）
-                server_weights = div_server_weights(server_weights, server_accumulate_mask)
-                global_state_dict = copy.deepcopy(global_state_dict)
-                # 服务器将非 Lottery Ticket 的参数广播到每个设备
-                print(f"round_num is {round_num}")
-                for i in idxs_users:
-                    fushion_module = FusionModule(client_state_dicts[i], client_delta_tensors[i])
-                    client_state_dicts[i] = broadcast_server_to_client_initialization(
-                        server_weights, client_masks[i], client_state_dicts[i], client_delta_tensors[i], fusion_module=fushion_module
-                    )
+            # else:
+            #     # 使用原始的聚合方法（FedSelect 默认方法）
+            #     server_weights = div_server_weights(server_weights, server_accumulate_mask)
+            #     global_state_dict = copy.deepcopy(server_weights)
+            #     # 服务器将非 Lottery Ticket 的参数广播到每个设备
+            #     print(f"round_num is {round_num}")
+            #     for i in idxs_users:
+            #         fushion_module = FusionModule(client_state_dicts[i], client_delta_tensors[i])
+            #         client_state_dicts[i] = broadcast_server_to_client_initialization(
+            #             server_weights, client_masks[i], client_state_dicts[i], client_delta_tensors[i], fusion_module=fushion_module
+            #         )
             
             server_accumulate_mask = OrderedDict()
             server_weights = OrderedDict()
@@ -592,6 +590,7 @@ def load_model(args: Any) -> nn.Module:
     args.device = device
     # model = resnet18(pretrained=args.pretrained_init)
     model = get_model(name=args.model, input_dim=29, num_classes=2)
+    model.load_state_dict(torch.load('./fed_model-mlp120.pt'))
     # num_ftrs = model.fc.in_features
     # model.fc = nn.Linear(num_ftrs, args.num_classes)
     # model = model.to(device)
