@@ -394,7 +394,7 @@ def fedselect_algorithm(
                     global_state_dict = FedRWA(global_state_dict, dw_list, accuracies, risk_scores)
                 
                 # 将聚合后的参数广播到所有客户端
-                for i in idxs_users:
+                for i in all_users:
                     # 应用 mask：只更新非本地参数（mask==0 的部分）
                     for key in global_state_dict.keys():
                         if "weight" in key or "bias" in key:
