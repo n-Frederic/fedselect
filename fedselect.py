@@ -364,8 +364,11 @@ def fedselect_algorithm(
         print(f"\n📊 Round {round_num+1} Aggregated Metrics:")
         print(f"  Total Confusion Matrix:\n{aggregated_metrics['total_cm']}")
         print(f"  Aggregated Recall: {aggregated_metrics['aggregated_recall']:.4f}")
+        print(f"  Aggregated Precision: {aggregated_metrics['aggregated_precision']:.4f}")
         print(f"  Aggregated F1:     {aggregated_metrics['aggregated_f1']:.4f}")
         print(f"  Average AUC:       {aggregated_metrics['avg_auc']:.4f}\n")
+        print(f"  Average PR-AUC:       {aggregated_metrics['avg_pr_auc']:.4f}\n")
+
 
         if round_num < com_rounds - 1:
             # 选择聚合算法
