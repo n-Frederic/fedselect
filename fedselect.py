@@ -331,7 +331,7 @@ def fedselect_algorithm(
             # 只有在 FedSelect 模式（fed_type=0）下才更新 mask
             # FedAVG/FedMEAN/FedRWA 模式下 mask 保持全 0（所有参数都是全局参数）
             local_type = getattr(args, 'local_type', 0)
-            if local_type == 1 and round_num % lth_iters == 0 :
+            if local_type == 1 and round_num % lth_iters == 0 and round_num != 0:
                 #更新select掩码与全局-本地变化值
                 client_mask, delta_tensor_dict = delta_update(
                     prune_rate,

@@ -6,7 +6,7 @@ def lth_args_parser():
     # parser.add_argument("--lr", default=0.05, type=float, help="Learning rate")
     parser.add_argument("--lr", default=0.01, type=float, help="Learning rate")
     parser.add_argument("--batch_size", default=128, type=int)
-    parser.add_argument("--lth_epoch_iters", default=1, type=int)
+    parser.add_argument("--lth_epoch_iters", default=3, type=int)
     parser.add_argument(
         "--dataset",
         default="creditcard",
@@ -72,7 +72,7 @@ def lth_args_parser():
     parser.add_argument("--local_type", type=int, default=1,
                         help="0=无mask，1=mask")
 
-    parser.add_argument("--agg_type", type=int, default=1,
+    parser.add_argument("--agg_type", type=int, default=2,
                         help="聚合类型：0=FedAVG，1=FedSelect融合，2=FedRWA")
 
     parser.add_argument("--risk_type", type=int, default=3,
