@@ -81,52 +81,47 @@ def FedMEAN(
 
 
 def FedRWA(
-    w: OrderedDict,
-    dw: List[OrderedDict],
-    a: List[float],
-    s: List[float]
+        w: OrderedDict,
+        dw: List[OrderedDict],
+        a: List[float],
+        s: List[float],
+        masks: List[OrderedDict] = None  # 新增参数
 ) -> OrderedDict:
-    """引入风险权值的联邦聚合算法
-    
-    该算法根据客户端数据集的风险特征进行加权聚合，风险数值与数据集大小、
-    欺诈样本比例、欺诈金额大小正相关。
-    
-    Args:
-        w: 全局模型的当前参数
-        dw: 各客户端的参数更新列表
-        a: 各客户端的本地测试准确率列表
-        s: 各客户端的数据集风险数值列表
-           风险数值的计算方式：
-           - risk_type=1: 数据集大小
-           - risk_type=2: 欺诈样本数 + 正常样本数/M (M为平衡因子)
-           - risk_type=3: 欺诈金额总和
-    
-    Returns:
-        更新后的全局模型参数
-    """
-    # 计算第0个客户端融合风险权值的参数更新
-    # k代表模型中的每种参数，例如 'conv1.weight', 'conv1.bias' 等
-    dw_avg = copy.deepcopy(dw[0])
-    
-    # 使用风险权值进行加权
-    for k in dw_avg.keys():
-        dw_avg[k] = (s[0] / sum(s)) * dw_avg[k]
-        # 可选：同时考虑准确率
-        # dw_avg[k] = a[0] * (s[0] / sum(s)) * dw_avg[k]
-    
-    # 累积所有客户端融合风险权值的参数更新
-    for k in dw_avg.keys():
-        for i in range(1, len(dw)):
-            dw_avg[k] += (s[i] / sum(s)) * dw[i][k]
-            # 可选：同时考虑准确率
-            # dw_avg[k] += a[i] * (s[i] / sum(s)) * dw[i][k]
-    
-    # 更新全局模型的参数
+    """支持掩码的 FedRWA"""
+
+    dw_numerator = copy.deepcopy(dw[0])
+    weight_denominator = copy.deepcopy(dw[0])
+    for k in dw_numerator.keys():
+        dw_numerator[k].zero_()
+        weight_denominator[k].zero_()
+
+    total_risk = sum(s)
+
+    for i in range(len(dw)):
+        # FedRWA 的基础权重计算
+        alpha = s[i] / total_risk
+
+        for k in dw[i].keys():
+            if masks is not None and masks[i] is not None and k in masks[i]:
+                valid_map = (masks[i][k] == 0).float()
+            else:
+                valid_map = 1.0
+
+            dw_numerator[k] += dw[i][k] * alpha * valid_map #计算加权后更新量
+            weight_denominator[k] += alpha * valid_map #按掩码总共的权重
+
+    # 计算最终更新量
+    dw_final = OrderedDict()
+
+    for k in dw_numerator.keys():
+        dw_final[k] = dw_numerator[k] / (weight_denominator[k]) #除所有的权重
+
+    # 4. 更新
     w_updated = copy.deepcopy(w)
     for k in w_updated.keys():
-        if k in dw_avg:
-            w_updated[k] = w_updated[k] + dw_avg[k]
-    
+        if k in dw_final:
+            w_updated[k] = w_updated[k] + dw_final[k]
+
     return w_updated
 
 

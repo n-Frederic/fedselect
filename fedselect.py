@@ -331,7 +331,7 @@ def fedselect_algorithm(
             # 只有在 FedSelect 模式（fed_type=0）下才更新 mask
             # FedAVG/FedMEAN/FedRWA 模式下 mask 保持全 0（所有参数都是全局参数）
             local_type = getattr(args, 'local_type', 0)
-            if local_type == 1 and round_num % lth_iters == 0 and round_num != 0:
+            if local_type == 1 and round_num % lth_iters == 0 :
                 #更新select掩码与全局-本地变化值
                 client_mask, delta_tensor_dict = delta_update(
                     prune_rate,
@@ -371,7 +371,7 @@ def fedselect_algorithm(
             # 选择聚合算法
             agg_type = getattr(args, 'agg_type', 0)  # 默认使用原始方法
             
-            if agg_type in [0, 1, 2] and hasattr(args, 'dataset') and args.dataset == 'creditcard':
+            if agg_type in [0, 2] and hasattr(args, 'dataset') and args.dataset == 'creditcard':
                 # 使用新的聚合算法（FedAVG, FedMEAN, FedRWA）
                 print(f"使用聚合算法类型: {agg_type} ({'FedAVG' if agg_type == 0 else 'FedSelect' if agg_type == 1 else 'FedRWA'})")
                 
@@ -380,18 +380,23 @@ def fedselect_algorithm(
                 sample_nums = [client_sample_nums[i] for i in idxs_users]
                 accuracies = [client_accuracies_dict[i] for i in idxs_users]
                 risk_scores = [client_risk_scores[i] for i in idxs_users]
+
+                if getattr(args, 'local_type', 0) == 1:
+                    mask_list = [client_masks[i] for i in idxs_users]
+                else:
+                    mask_list = None
                 
                 # 执行聚合（基于上一次全局参数）
                 if agg_type == 0:
                     # FedAVG: 基于样本数量加权
                     global_state_dict = FedAVG(global_state_dict, dw_list, sample_nums)
-                elif agg_type == 1:
-                    # FedMEAN: 简单平均
-                    global_state_dict = FedMEAN(global_state_dict, dw_list)
+                # elif agg_type == 1:
+                #     # FedMEAN: 简单平均
+                #     global_state_dict = FedMEAN(global_state_dict, dw_list)
                 elif agg_type == 2:
-                    # FedRWA: 风险加权
+                    # FedRWA: 风险加权（融合了掩码）
                     print(f"风险分数: {risk_scores}")
-                    global_state_dict = FedRWA(global_state_dict, dw_list, accuracies, risk_scores)
+                    global_state_dict = FedRWA(global_state_dict, dw_list, accuracies, risk_scores,masks=mask_list)
                 
                 # 将聚合后的参数广播到所有客户端
                 for i in all_users:
@@ -411,17 +416,17 @@ def fedselect_algorithm(
                         else:
                             # 其他参数（如 BN 的 running_mean 等）直接复制
                             client_state_dicts[i][key] = global_state_dict[key]
-            # else:
-            #     # 使用原始的聚合方法（FedSelect 默认方法）
-            #     server_weights = div_server_weights(server_weights, server_accumulate_mask)
-            #     global_state_dict = copy.deepcopy(server_weights)
-            #     # 服务器将非 Lottery Ticket 的参数广播到每个设备
-            #     print(f"round_num is {round_num}")
-            #     for i in idxs_users:
-            #         fushion_module = FusionModule(client_state_dicts[i], client_delta_tensors[i])
-            #         client_state_dicts[i] = broadcast_server_to_client_initialization(
-            #             server_weights, client_masks[i], client_state_dicts[i], client_delta_tensors[i], fusion_module=fushion_module
-            #         )
+            else:
+                # 使用原始的聚合方法（FedSelect 默认方法）
+                server_weights = div_server_weights(server_weights, server_accumulate_mask)
+                global_state_dict = copy.deepcopy(server_weights)
+                # 服务器将非 Lottery Ticket 的参数广播到每个设备
+                print(f"round_num is {round_num}")
+                for i in idxs_users:
+                    fushion_module = FusionModule(client_state_dicts[i], client_delta_tensors[i])
+                    client_state_dicts[i] = broadcast_server_to_client_initialization(
+                        server_weights, client_masks[i], client_state_dicts[i], client_delta_tensors[i], fusion_module=fushion_module
+                    )
             
             server_accumulate_mask = OrderedDict()
             server_weights = OrderedDict()
