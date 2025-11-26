@@ -542,6 +542,7 @@ def cross_client_eval(
         'total_cm': total_cm,
         'aggregated_recall': aggregated_recall,
         'aggregated_f1': aggregated_f1,
+        'aggregated_precision': aggregated_precision,
         'avg_auc': avg_auc,
         'avg_pr_auc': np.mean(pr_auc_list) if len(pr_auc_list) > 0 else 0.0
     }
@@ -605,7 +606,7 @@ def load_model(args: Any) -> nn.Module:
     args.device = device
     # model = resnet18(pretrained=args.pretrained_init)
     model = get_model(name=args.model, input_dim=29, num_classes=2)
-    model.load_state_dict(torch.load('./fed_model-mlp120.pt'))
+    model.load_state_dict(torch.load('./fed_model-mlp120.pt',map_location=device))
     # num_ftrs = model.fc.in_features
     # model.fc = nn.Linear(num_ftrs, args.num_classes)
     # model = model.to(device)
