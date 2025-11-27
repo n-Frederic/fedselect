@@ -185,7 +185,7 @@ def fedselect_algorithm(
             - lth_convergence: 彩票票据收敛历史
     """
     # 初始化模型
-    torch.save(model.state_dict(), './fed_model-mlp120.pt')
+    # torch.save(model.state_dict(), './fed_model-mlp120.pt')
     initial_state_dict = copy.deepcopy(model.state_dict())
     com_rounds = args.com_rounds
     # 初始化服务器
