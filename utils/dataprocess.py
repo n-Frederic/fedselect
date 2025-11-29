@@ -13,6 +13,12 @@ class DatasetFromCSV(Dataset):
         self.data_all = pd.read_csv(csv_path)
         order = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11', 'V12', 'V13', 'V14', 'V15', 'V16','V17', 'V18', 'V19', 'V20', 'V21', 'V22', 'V23', 'V24', 'V25', 'V26', 'V27', 'V28', 'Amount', 'Class']
         self.data_all = self.data_all[order]
+        
+        # 标准化 Amount 字段，避免特征尺度差异导致梯度爆炸
+        amount_mean = self.data_all['Amount'].mean()
+        amount_std = self.data_all['Amount'].std()
+        self.data_all['Amount'] = (self.data_all['Amount'] - amount_mean) / (amount_std + 1e-8)
+        
         y = self.data_all['Class']
         self.data_train, self.data_test = train_test_split(self.data_all, test_size=0.2, random_state=888,stratify=y)
 
