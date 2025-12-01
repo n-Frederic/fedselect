@@ -212,6 +212,10 @@ def fedselect_algorithm(
     # 开始联邦学习
     for round_num in range(com_rounds):
         print(f"=== Training Round {round_num+1}/{com_rounds} ===")
+
+        # 输出本地化模式
+        local_type = getattr(args, 'local_type', 0)
+        print(f"本地化模式: {'使用掩码 (Mask-based)' if local_type == 1 else '无掩码 (Standard SGD)'}")
         round_loss = 0
         
         
