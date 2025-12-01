@@ -114,9 +114,16 @@ def FedRWA(
     dw_final = OrderedDict()
 
     for k in dw_numerator.keys():
-        dw_final[k] = dw_numerator[k] / (weight_denominator[k]) #除所有的权重
+        # 防止除零：对于所有客户端 mask=1 (local参数) 的位置，weight_denominator 为 0
+        # 这些位置不应该被聚合更新，保持为 0
+        safe_denominator = weight_denominator[k].clone()
+        zero_mask = (safe_denominator == 0)
+        safe_denominator[zero_mask] = 1.0  # 避免除零
+        
+        dw_final[k] = dw_numerator[k] / safe_denominator
+        dw_final[k][zero_mask] = 0.0 
 
-    # 4. 更新
+    # 更新
     w_updated = copy.deepcopy(w)
     for k in w_updated.keys():
         if k in dw_final:

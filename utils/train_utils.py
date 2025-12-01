@@ -221,8 +221,15 @@ def get_client_fraud_stats(
         
         fraud_count = len(fraud_data)
         normal_count = len(normal_data)
-        fraud_amount = fraud_data['Amount'].sum() if fraud_count > 0 else 0.0
-        avg_fraud_amount = fraud_data['Amount'].mean() if fraud_count > 0 else 0.0
+
+         # 使用原始金额计算风险权重（如果存在 Amount_raw 列）
+        if 'Amount_raw' in fraud_data.columns:
+            fraud_amount = fraud_data['Amount_raw'].sum() if fraud_count > 0 else 0.0
+            avg_fraud_amount = fraud_data['Amount_raw'].mean() if fraud_count > 0 else 0.0
+        else:
+            # 兼容旧数据，使用标准化后的 Amount
+            fraud_amount = fraud_data['Amount'].sum() if fraud_count > 0 else 0.0
+            avg_fraud_amount = fraud_data['Amount'].mean() if fraud_count > 0 else 0.0
         
         return {
             'dataset_size': dataset_size,
