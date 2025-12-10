@@ -409,7 +409,30 @@ def fedselect_algorithm(
                 for i in all_users:
                     # 应用 mask：只更新非本地参数（mask==0 的部分）
                     for key in global_state_dict.keys():
+                        global_param = global_state_dict[key]
+                        local_param = client_state_dicts[i][key]
                         if "weight" in key or "bias" in key:
+                            # 线性归一化
+                            delta = client_param_updates[i][key].to(args.device)
+                            delta_min = delta.min()
+                            delta_max = delta.max()
+                            alpha = (delta - delta_min) / (delta_max - delta_min + 1e-8)
+
+                            # sigmoid
+                            # delta = client_param_updates[i][key].to(args.device)
+                            # mean = delta.mean()
+                            # std = delta.std() + 1e-8
+                            #
+                            # alpha = torch.sigmoid((delta - mean) / std)
+
+                            # 按排名
+                            # d = client_param_updates[i][key].abs().flatten()
+                            # sorted_idx = torch.argsort(d)
+                            # percent = torch.zeros_like(d)
+                            # percent[sorted_idx] = torch.linspace(0, 1, steps=len(d))
+                            # alpha = percent.view_as(client_param_updates[i][key])
+
+                            fused = alpha * global_param + (1-alpha)*local_param
                             if client_masks[i] is not None and args.local_type==1 and key in client_masks[i]:
                                 # 只在 mask 为 0（全局参数）的位置更新
                                 client_state_dicts[i][key] = torch.where(
