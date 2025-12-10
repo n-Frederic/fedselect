@@ -440,6 +440,7 @@ def fedselect_algorithm(
                                     global_param,
                                     fused
                                 )
+                                # 把fused换成local_param就是之前的
                             else:
                                 # 如果没有 mask，直接使用聚合后的参数
                                 client_state_dicts[i][key] = global_state_dict[key]
