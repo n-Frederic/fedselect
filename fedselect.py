@@ -437,8 +437,8 @@ def fedselect_algorithm(
                                 # 只在 mask 为 0（全局参数）的位置更新
                                 client_state_dicts[i][key] = torch.where(
                                     client_masks[i][key] == 0,
-                                    global_state_dict[key],
-                                    client_state_dicts[i][key]
+                                    global_param,
+                                    fused
                                 )
                             else:
                                 # 如果没有 mask，直接使用聚合后的参数
