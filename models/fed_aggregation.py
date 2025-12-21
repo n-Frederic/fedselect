@@ -100,6 +100,7 @@ def FedRWA(
     for i in range(len(dw)):
         # FedRWA 的基础权重计算
         alpha = s[i] / total_risk
+        # alpha=1.0
 
         for k in dw[i].keys():
             if masks is not None and masks[i] is not None and k in masks[i]:

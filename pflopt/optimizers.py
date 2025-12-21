@@ -59,7 +59,7 @@ def local_alt(
     optimizer,
     data_loader,
     device,
-    clip_grad_norm=False,
+    clip_grad_norm=True,
     max_grad_norm=3.50,
 ):
     assert isinstance(optimizer, MaskLocalAltSGD), "optimizer must be MaskLocalAltSGD"
@@ -73,6 +73,16 @@ def local_alt(
         loss.backward()
         if clip_grad_norm:
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+
+        # 监控：加入打印
+        if clip_grad_norm:
+            # clip_grad_norm_ 会返回裁剪前的总范数 (Total Norm)
+            total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+
+            # 假设 max_grad_norm=3.5，如果范数超过 10，说明裁剪非常剧烈
+            if total_norm > 10.0 or torch.isnan(total_norm):
+                print(f"  [Clipping Monitor] Batch {batch_idx}: Pre-clip Norm={total_norm:.4f} (Clipping Active!)")
+
         optimizer.step()
     avg_loss_1 /= len(data_loader)
     optimizer.toggle()

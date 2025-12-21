@@ -443,12 +443,37 @@ def fedselect_algorithm(
             if agg_type in [0, 2] and hasattr(args, 'dataset') and args.dataset == 'creditcard':
                 # 使用新的聚合算法（FedAVG, FedMEAN, FedRWA）
                 print(f"使用聚合算法类型: {agg_type} ({'FedAVG' if agg_type == 0 else 'FedSelect' if agg_type == 1 else 'FedRWA'})")
-                
+
+                #测试
                 # 准备聚合所需的数据
                 dw_list = [client_param_updates[i] for i in idxs_users]
                 sample_nums = [client_sample_nums[i] for i in idxs_users]
                 accuracies = [client_accuracies_dict[i] for i in idxs_users]
                 risk_scores = [client_risk_scores[i] for i in idxs_users]
+
+                print(f"\n--- [Round {round_num} Aggregation Safety Check] ---")
+                for i, idx in enumerate(idxs_users):
+                    # 计算该客户端更新向量的 L2 范数
+                    client_update_norm = 0.0
+                    for k, v in dw_list[i].items():
+                        if v.dtype == torch.float32:
+                            client_update_norm += torch.norm(v).item() ** 2
+                    client_update_norm = client_update_norm ** 0.5
+
+                    risk = risk_scores[i]
+
+                    # 打印异常：范数过大 或 过小(模型死掉)
+                    status = "OK"
+                    if client_update_norm > 20.0: status = "⚠️ EXPLODING"
+                    if client_update_norm < 1e-4: status = "⚠️ DEAD"
+                    if torch.isnan(dw_list[i][list(dw_list[i].keys())[0]]).any(): status = "☠️ NaN"
+
+                    # 重点关注高风险客户端
+                    if status != "OK" or risk > 2000:
+                        print(
+                            f"Client {idx} | Risk: {risk:.1f} | Update Norm: {client_update_norm:.4f} | Status: {status}")
+
+                print("----------------------------------------------------")
 
                 if getattr(args, 'local_type', 0) == 1:
                     mask_list = [client_masks[i] for i in idxs_users]
@@ -471,23 +496,6 @@ def fedselect_algorithm(
                     # FedRWA: 风险加权（融合了掩码）
                     print(f"风险分数: {risk_scores}")
                     global_state_dict = FedRWA(global_state_dict, dw_list, accuracies, risk_scores,masks=mask_list)
-
-                # ================= [探针 2: 检查全局聚合模型] =================
-                if round_num % 10 == 0:
-                    print(f"\n[Probe 2] Round {round_num} Global Model Check (Post-Aggregation)")
-
-                    # 1. 检查 Bias 数值
-                    if 'fc.bias' in global_state_dict:
-                        bias_mean = global_state_dict['fc.bias'].mean().item()
-                        print(f"  >>> Global FC Bias Mean: {bias_mean:.4f}")
-                        if abs(bias_mean) > 10:
-                            print("  [WARNING] Bias is excessively large! Softmax will saturate.")
-
-                    # 2. 评估全局模型性能
-                    model.load_state_dict(global_state_dict)
-                    test_metrics = evaluate(model, DataLoader(dataset_test, batch_size=args.batch_size))
-                    print(f"  >>> Global Precision: {test_metrics.get('precision', 0):.4f}")
-                # ==============================================================
 
                 # 将聚合后的参数广播到所有客户端
                 for i in all_users:
