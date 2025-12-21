@@ -116,7 +116,7 @@ def FedRWA(
     for k in dw_numerator.keys():
         # 防止除零：对于所有客户端 mask=1 (local参数) 的位置，weight_denominator 为 0
         # 这些位置不应该被聚合更新，保持为 0
-        safe_denominator = weight_denominator[k].clone()
+        safe_denominator = weight_denominator[k].clone() + 1e-8 #避免除零
         zero_mask = (safe_denominator == 0)
         safe_denominator[zero_mask] = 1.0  # 避免除零
         

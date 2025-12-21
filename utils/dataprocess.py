@@ -47,7 +47,7 @@ class DatasetBalance(Dataset):
         # 对数据集进行上采样平衡处理
         y = self.data['Class']
         X = self.data.drop(columns='Class')
-        X_resampled, y_resampled = SMOTE(random_state=888).fit_resample(X, y)
+        X_resampled, y_resampled = SMOTE(random_state=888,sampling_strategy=0.1).fit_resample(X, y)
         # X_resampled, y_resampled = SMOTE().fit_resample(X, y)
         self.data = pd.concat([X_resampled, y_resampled], axis=1)
         self.labels = np.asarray(self.data.iloc[:, -1])
