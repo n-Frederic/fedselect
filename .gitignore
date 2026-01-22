@@ -10,3 +10,5 @@ data/cifar10/cifar-10-batches-py/batches.meta
 /models/__pycache__
 /models/__pycache__
 requirements.txt
+12.1-fedavg.txt
+*.txt
