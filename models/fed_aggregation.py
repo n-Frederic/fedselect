@@ -83,7 +83,6 @@ def FedMEAN(
 def FedRWA(
         w: OrderedDict,
         dw: List[OrderedDict],
-        a: List[float],
         s: List[float],
         masks: List[OrderedDict] = None  # 新增参数
 ) -> OrderedDict:
@@ -100,6 +99,7 @@ def FedRWA(
     for i in range(len(dw)):
         # FedRWA 的基础权重计算
         alpha = s[i] / total_risk
+
         # alpha=1.0
 
         for k in dw[i].keys():
@@ -118,11 +118,8 @@ def FedRWA(
         # 防止除零：对于所有客户端 mask=1 (local参数) 的位置，weight_denominator 为 0
         # 这些位置不应该被聚合更新，保持为 0
         safe_denominator = weight_denominator[k].clone() + 1e-8 #避免除零
-        zero_mask = (safe_denominator == 0)
-        safe_denominator[zero_mask] = 1.0  # 避免除零
         
         dw_final[k] = dw_numerator[k] / safe_denominator
-        dw_final[k][zero_mask] = 0.0 
 
     # 更新
     w_updated = copy.deepcopy(w)

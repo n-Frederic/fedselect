@@ -448,7 +448,6 @@ def fedselect_algorithm(
                 # 准备聚合所需的数据
                 dw_list = [client_param_updates[i] for i in idxs_users]
                 sample_nums = [client_sample_nums[i] for i in idxs_users]
-                accuracies = [client_accuracies_dict[i] for i in idxs_users]
                 risk_scores = [client_risk_scores[i] for i in idxs_users]
 
                 print(f"\n--- [Round {round_num} Aggregation Safety Check] ---")
@@ -495,7 +494,7 @@ def fedselect_algorithm(
                                 print(f"Error: Client {idx} uploaded NaN in layer {k} at Round {round_num}")
                     # FedRWA: 风险加权（融合了掩码）
                     print(f"风险分数: {risk_scores}")
-                    global_state_dict = FedRWA(global_state_dict, dw_list, accuracies, risk_scores,masks=mask_list)
+                    global_state_dict = FedRWA(global_state_dict, dw_list, risk_scores,masks=mask_list)
 
                 # 将聚合后的参数广播到所有客户端
                 for i in all_users:
@@ -504,26 +503,26 @@ def fedselect_algorithm(
                         global_param = global_state_dict[key]
                         local_param = client_state_dicts[i][key]
                         if "weight" in key or "bias" in key:
-                            # # 线性归一化
+                            # 线性归一化
                             # delta = client_param_updates[i][key].to(args.device)
                             # delta_min = delta.min()
                             # delta_max = delta.max()
                             # alpha = (delta - delta_min) / (delta_max - delta_min + 1e-8)
+
+                            # sigmoid
+                            # delta = client_param_updates[i][key ].to(args.device)
+                            # mean = delta.mean()
+                            # std = delta.std() + 1e-8
                             #
-                            # # sigmoid
-                            # # delta = client_param_updates[i][key].to(args.device)
-                            # # mean = delta.mean()
-                            # # std = delta.std() + 1e-8
-                            # #
-                            # # alpha = torch.sigmoid((delta - mean) / std)
-                            #
-                            # # 按排名
-                            # # d = client_param_updates[i][key].abs().flatten()
-                            # # sorted_idx = torch.argsort(d)
-                            # # percent = torch.zeros_like(d)
-                            # # percent[sorted_idx] = torch.linspace(0, 1, steps=len(d))
-                            # # alpha = percent.view_as(client_param_updates[i][key])
-                            #
+                            # alpha = torch.sigmoid((delta - mean) / std)
+
+                            # 按排名
+                            # d = client_param_updates[i][key].abs().flatten()
+                            # sorted_idx = torch.argsort(d)
+                            # percent = torch.zeros_like(d)
+                            # percent[sorted_idx] = torch.linspace(0, 1, steps=len(d))
+                            # alpha = percent.view_as(client_param_updates[i][key])
+
                             # fused = alpha * global_param + (1-alpha)*local_param
                             if client_masks[i] is not None and args.local_type==1 and key in client_masks[i]:
                                 # 只在 mask 为 0（全局参数）的位置更新

@@ -46,7 +46,7 @@ if __name__ == '__main__':
     for x in img_size:
         len_in *= x
     len_in = 29
-    net_local = MLP(input_dim=len_in,hidden=200, num_classes=args.num_classes).to(args.device)
+    net_local = MLP(input_dim=len_in,hidden=120, num_classes=args.num_classes).to(args.device)
 
     print(net_local)
     for ui in range(len(dict_users)):
