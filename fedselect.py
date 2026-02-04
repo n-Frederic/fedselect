@@ -224,8 +224,7 @@ def fedselect_algorithm(
         local_type = getattr(args, 'local_type', 0)
         print(f"本地化模式: {'使用掩码 (Mask-based)' if local_type == 1 else '无掩码 (Standard SGD)'}")
         round_loss = 0
-        
-        
+
         # 用于风险加权聚合的变量
         client_param_updates = {}  # 存储每个客户端的参数更新
         client_sample_nums = {}  # 存储每个客户端的样本数量
@@ -233,8 +232,19 @@ def fedselect_algorithm(
         client_risk_scores = {}  # 存储每个客户端的风险分数
         m = max(int(args.frac * args.num_users), 1)
         idxs_users = np.random.choice(range(args.num_users), m, replace=False)
-        
+
+        # print(f"\n[Monitor] Round {round_num + 1} Selected Clients Detail:")
+        # print(f"{'ID':<10} | {'Total Samples':<15} | {'Fraud Samples':<15} | {'Fraud Ratio':<15}")
+        # print("-" * 65)
+
         for i in idxs_users:
+            # stats = get_client_fraud_stats(dataset_train, dict_users_train[i])
+            # total = stats['dataset_size']
+            # fraud = stats['fraud_count']
+            # ratio = (fraud / total * 100) if total > 0 else 0
+            # print(f"{i:<10} | {total:<15} | {fraud:<15} | {ratio:.4f}%")
+            # print("-" * 65 + "\n")
+
             # 保存训练前的状态（用于计算参数更新）
             state_before_training = copy.deepcopy(model.state_dict()) if hasattr(args, 'dataset') and args.dataset == 'creditcard' and getattr(args, 'local_type', 0) in [0, 1] else None
             
@@ -257,22 +267,44 @@ def fedselect_algorithm(
             
             # 收集客户端的风险统计信息（仅对 creditcard 数据集）
             if hasattr(args, 'dataset') and args.dataset == 'creditcard':
+                client_model.eval()
+                tp_amount = 0.0
+                fp_amount = 0.0
+
+                with torch.no_grad():
+                    for data, target in ldr_train:
+                        data, target = data.to(args.device), target.to(args.device)
+                        output = client_model(data)
+                        preds = output.argmax(dim=1)
+
+                        tp_mask = (preds == 1) & (target == 1)
+                        fp_mask = (preds == 1) & (target == 0)
+
+                        if tp_mask.any() or fp_mask.any():
+                            batch_amounts = data[:, -1]
+                            tp_amount += batch_amounts[tp_mask].sum().item()
+                            fp_amount += batch_amounts[fp_mask].sum().item()
+
                 fraud_stats = get_client_fraud_stats(dataset_train, dict_users_train[i])
+
+                risk_ratio = tp_amount / (tp_amount + fp_amount + 1e-6)
+
                 client_sample_nums[i] = fraud_stats['dataset_size']
                 
                 # 计算客户端准确率（这里简化，使用损失的倒数作为代理）
                 # 在实际应用中，应该在验证集上评估准确率
                 client_accuracies_dict[i] = 1.0 / (1.0 + loss)
-                
+                client_risk_scores[i] = risk_ratio
+
                 # 计算风险分数
-                risk_type = getattr(args, 'risk_type', 1)
-                client_risk_scores[i] = compute_risk_score(
-                    dataset_size=fraud_stats['dataset_size'],
-                    fraud_count=fraud_stats['fraud_count'],
-                    normal_count=fraud_stats['normal_count'],
-                    fraud_amount=fraud_stats['fraud_amount'],
-                    risk_type=risk_type
-                )
+                # risk_type = getattr(args, 'risk_type', 1)
+                # client_risk_scores[i] = compute_risk_score(
+                #     dataset_size=fraud_stats['dataset_size'],
+                #     fraud_count=fraud_stats['fraud_count'],
+                #     normal_count=fraud_stats['normal_count'],
+                #     fraud_amount=fraud_stats['fraud_amount'],
+                #     risk_type=risk_type
+                # )
                 
                 # 存储参数更新（训练后 - 训练前）
                 param_update = OrderedDict()
@@ -285,7 +317,6 @@ def fedselect_algorithm(
                 client_sample_nums[i] = len(dict_users_train[i])
                 client_accuracies_dict[i] = 1.0 / (1.0 + loss)
                 client_risk_scores[i] = float(len(dict_users_train[i]))
-            
 
             # try:
             #     batch = next(iter(ldr_train))
@@ -350,7 +381,7 @@ def fedselect_algorithm(
                     client_state_dict_prev[i],
                     client_masks_prev[i],
                     bound=prune_target,
-                    invert=True,
+                    invert=False,
                 )
                 client_state_dict_prev[i] = copy.deepcopy(client_state_dicts[i])
                 client_masks_prev[i] = copy.deepcopy(client_mask)
@@ -498,45 +529,50 @@ def fedselect_algorithm(
 
                 # 将聚合后的参数广播到所有客户端
                 for i in all_users:
+                    has_update = i in client_param_updates
                     # 应用 mask：只更新非本地参数（mask==0 的部分）
                     for key in global_state_dict.keys():
                         global_param = global_state_dict[key]
                         local_param = client_state_dicts[i][key]
                         if "weight" in key or "bias" in key:
-                            # 线性归一化
-                            # delta = client_param_updates[i][key].to(args.device)
-                            # delta_min = delta.min()
-                            # delta_max = delta.max()
-                            # alpha = (delta - delta_min) / (delta_max - delta_min + 1e-8)
+                            if has_update:
+                                # 线性归一化
+                                # delta = client_param_updates[i][key].to(args.device)
+                                # delta_min = delta.min()
+                                # delta_max = delta.max()
+                                # alpha = (delta - delta_min) / (delta_max - delta_min + 1e-8)
+                                #
+                                # # sigmoid
+                                # # delta = client_param_updates[i][key].to(args.device)
+                                # # mean = delta.mean()
+                                # # std = delta.std() + 1e-8
+                                # #
+                                # # alpha = torch.sigmoid((delta - mean) / std)
+                                #
+                                # 按排名
+                                d = client_param_updates[i][key].abs().flatten()
+                                sorted_idx = torch.argsort(d)
+                                percent = torch.zeros_like(d)
+                                percent[sorted_idx] = torch.linspace(0, 1, steps=len(d))
+                                alpha = percent.view_as(client_param_updates[i][key])
+                                alpha = torch.pow(alpha, 2)
 
-                            # sigmoid
-                            # delta = client_param_updates[i][key ].to(args.device)
-                            # mean = delta.mean()
-                            # std = delta.std() + 1e-8
-                            #
-                            # alpha = torch.sigmoid((delta - mean) / std)
-
-                            # 按排名
-                            # d = client_param_updates[i][key].abs().flatten()
-                            # sorted_idx = torch.argsort(d)
-                            # percent = torch.zeros_like(d)
-                            # percent[sorted_idx] = torch.linspace(0, 1, steps=len(d))
-                            # alpha = percent.view_as(client_param_updates[i][key])
-
-                            # fused = alpha * global_param + (1-alpha)*local_param
-                            if client_masks[i] is not None and args.local_type==1 and key in client_masks[i]:
-                                # 只在 mask 为 0（全局参数）的位置更新
-                                client_state_dicts[i][key] = torch.where(
-                                    client_masks[i][key] == 0,
-                                    global_state_dict[key],
-                                    client_state_dicts[i][key]
-                                    # global_param,
-                                    # fused
-                                )
-                                # 把fused换成local_param就是之前的
-                            else:
-                                # 如果没有 mask，直接使用聚合后的参数
-                                client_state_dicts[i][key] = global_state_dict[key]
+                                fused = (1-alpha) * local_param + alpha * global_param
+                                # print("use fused!!!!!!!!!!!!!!!!!!!!!!!")
+                                if client_masks[i] is not None and args.local_type==1 and key in client_masks[i]:
+                                    # 只在 mask 为 0（全局参数）的位置更新
+                                    # client_state_dicts[i][key] = torch.where(
+                                    #     client_masks[i][key] == 0,
+                                    #     global_state_dict[key],
+                                    #     client_state_dicts[i][key]
+                                    #     # global_param,
+                                    #     # fused
+                                    # )
+                                    client_state_dicts[i][key] = fused
+                                    # 把fused换成local_param就是之前的
+                                else:
+                                    # 如果没有 mask，直接使用聚合后的参数
+                                    client_state_dicts[i][key] = global_state_dict[key]
                         else:
                             # 其他参数（如 BN 的 running_mean 等）直接复制
                             client_state_dicts[i][key] = global_state_dict[key]

@@ -10,6 +10,7 @@
 
 import copy
 import torch
+import numpy as np
 from typing import Dict, List, OrderedDict
 
 
@@ -98,9 +99,11 @@ def FedRWA(
 
     for i in range(len(dw)):
         # FedRWA 的基础权重计算
-        alpha = s[i] / total_risk
-
-        # alpha=1.0
+        if total_risk > 0:
+            contribution_ratio = s[i] / total_risk
+            alpha = 0.2 + 0.8 * contribution_ratio
+        else:
+            alpha = 1.0 / len(dw)
 
         for k in dw[i].keys():
             if masks is not None and masks[i] is not None and k in masks[i]:
@@ -151,7 +154,7 @@ def compute_risk_score(
             3 - 欺诈金额总和
         balance_factor: 平衡因子（默认576，用于调整正常样本的权重）
     
-    Returns:
+    Returns:z
         风险数值
     """
     if risk_type == 1:

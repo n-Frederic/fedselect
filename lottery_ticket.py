@@ -212,27 +212,38 @@ def get_mask_from_delta(
                 )
                 return_mask[name] = torch.from_numpy(new_mask).to(device)
             else:
-                cutoff_index = np.round(
-                    (1 - prune_percent) * sorted_weights.size
-                ).astype(int)
+                cutoff_index = np.round((1 - prune_percent) * sorted_weights.size).astype(int)
                 cutoff = sorted_weights[cutoff_index]
 
-                # 设置衰减系数，每轮随机遗忘一些特色参数的掩码
-                # retain_prob = 0.9
-                # old_mask = return_mask[name].cpu()
-                # R = (torch.rand_like(old_mask.float()) < retain_prob).int()
-                # decayed_prev_mask = old_mask * R
-                #
-                # new_mask_tensor = torch.from_numpy(new_mask).to(device)
-                #
-                # final_mask = torch.max(decayed_prev_mask, new_mask_tensor)
-                # return_mask[name] = final_mask
+                new_mask_np = np.where(abs(delta_tensor) >= cutoff, 1, 0)
+                new_mask_tensor = torch.from_numpy(new_mask_np).to(device)
 
-                # 将张量转换为 numpy 进行计算
-                new_mask = np.where(
-                    abs(delta_tensor) >= cutoff, 1, return_mask[name].cpu().numpy()
-                )
-                return_mask[name] = torch.from_numpy(new_mask).to(device)
+                retain_prob = 0.9
+                random_gate = (torch.rand_like(current_mask[name].float()) < retain_prob).int()
+
+                return_mask[name] = torch.clamp(current_mask[name] * random_gate + new_mask_tensor, 0, 1)
+            # else:
+            #     cutoff_index = np.round(
+            #         (1 - prune_percent) * sorted_weights.size
+            #     ).astype(int)
+            #     cutoff = sorted_weights[cutoff_index]
+            #
+            #     # 设置衰减系数，每轮随机遗忘一些特色参数的掩码
+            #     # retain_prob = 0.9
+            #     # old_mask = return_mask[name].cpu()
+            #     # R = (torch.rand_like(old_mask.float()) < retain_prob).int()
+            #     # decayed_prev_mask = old_mask * R
+            #     #
+            #     # new_mask_tensor = torch.from_numpy(new_mask).to(device)
+            #     #
+            #     # final_mask = torch.max(decayed_prev_mask, new_mask_tensor)
+            #     # return_mask[name] = final_mask
+            #
+            #     # 将张量转换为 numpy 进行计算
+            #     new_mask = np.where(
+            #         abs(delta_tensor) >= cutoff, 1, return_mask[name].cpu().numpy()
+            #     )
+            #     return_mask[name] = torch.from_numpy(new_mask).to(device)
 
     # print(eval_per_layer_sparsity(return_mask))
     # print("Sparsity per layer after update:")
