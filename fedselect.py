@@ -1,5 +1,8 @@
 # 导入库
 import copy
+import csv
+import time
+
 import numpy as np
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -185,6 +188,17 @@ def fedselect_algorithm(
             - cross_client_acc: 跨客户端准确率矩阵
             - lth_convergence: 彩票票据收敛历史
     """
+    # 定义文件名，包含时间戳防止覆盖
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    csv_filename = f"fed_metrics_{args.dataset if hasattr(args, 'dataset') else 'data'}_{timestamp}.csv"
+
+    # 创建文件并写入表头
+    csv_headers = ['Round', 'Recall', 'Precision', 'F1', 'AUC', 'PR-AUC']
+    with open(csv_filename, mode='w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(csv_headers)
+
+    print(f"📄 [Log] 训练指标将实时保存至: {csv_filename}")
     # 初始化模型
     # torch.save(model.state_dict(), './fed_model-mlp120.pt')
     initial_state_dict = copy.deepcopy(model.state_dict())
@@ -411,61 +425,19 @@ def fedselect_algorithm(
         print(f"  Average AUC:       {aggregated_metrics['avg_auc']:.4f}\n")
         print(f"  Average PR-AUC:       {aggregated_metrics['avg_pr_auc']:.4f}\n")
 
-        # =============================================================
-        # 【测试方案：本地模型多阈值分析】
-        # 目的：验证是否是 0.5 的默认阈值导致了 Precision 低
-        # =============================================================
-        if round_num % 10 == 0:  # 每10轮抽查一次，避免刷屏
-            print(f"\n======== [Debug] Round {round_num} Local Model Analysis ========")
-
-            # 1. 提取第 0 个客户端的模型进行测试
-            test_client_idx = idxs_users[0]
-            print(f"Testing Client {test_client_idx} Model on Global Test Set...")
-
-            # 加载参数到临时模型
-            model.load_state_dict(client_state_dicts[test_client_idx])
-            model.eval()
-
-            # 2. 获取所有测试样本的“欺诈概率”
-            all_probs = []
-            all_targets = []
-            test_loader = torch.utils.data.DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False)
-
-            with torch.no_grad():
-                for data, target in test_loader:
-                    data = data.to(args.device)
-                    output = model(data)
-                    # 获取 Class 1 (欺诈) 的 Softmax 概率
-                    probs = F.softmax(output, dim=1)[:, 1]
-                    all_probs.extend(probs.cpu().numpy())
-                    all_targets.extend(target.numpy())
-
-            all_probs = np.array(all_probs)
-            all_targets = np.array(all_targets)
-
-            # 3. 【核心】遍历不同阈值，观察 Precision 的变化
-            # 如果模型是正常的，只是阈值不对，那么在 0.99 处 Precision 应该很高
-            thresholds = [0.5, 0.8, 0.95, 0.99, 0.999]
-
-            print(
-                f"{'Threshold':<10} | {'Precision':<10} | {'Recall':<10} | {'F1':<10} | {'Confusion Matrix (TN, FP, FN, TP)'}")
-            print("-" * 90)
-
-            for th in thresholds:
-                preds = (all_probs > th).astype(int)
-
-                prec = precision_score(all_targets, preds, zero_division=0)
-                rec = recall_score(all_targets, preds, zero_division=0)
-                f1 = f1_score(all_targets, preds, zero_division=0)
-                tn, fp, fn, tp = confusion_matrix(all_targets, preds).ravel()
-
-                print(f"{th:<10.3f} | {prec:<10.4f} | {rec:<10.4f} | {f1:<10.4f} | [{tn}, {fp}, {fn}, {tp}]")
-
-            # 4. 统计预测概率的分布情况，看看是不是大家都挤在 0.9 附近
-            avg_prob = np.mean(all_probs)
-            max_prob = np.max(all_probs)
-            print(f"\n[Stats] Avg Prob: {avg_prob:.4f}, Max Prob: {max_prob:.4f}")
-            print("============================================================\n")
+        try:
+            with open(csv_filename, mode='a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    round_num + 1,
+                    f"{aggregated_metrics['aggregated_recall']:.6f}",
+                    f"{aggregated_metrics['aggregated_precision']:.6f}",
+                    f"{aggregated_metrics['aggregated_f1']:.6f}",
+                    f"{aggregated_metrics['avg_auc']:.6f}",
+                    f"{aggregated_metrics['avg_pr_auc']:.6f}"
+                ])
+        except Exception as e:
+            print(f"⚠️ [Error] Failed to write to CSV: {e}")
 
         if round_num < com_rounds - 1:
             # 选择聚合算法
@@ -550,25 +522,26 @@ def fedselect_algorithm(
                                 # # alpha = torch.sigmoid((delta - mean) / std)
                                 #
                                 # 按排名
-                                d = client_param_updates[i][key].abs().flatten()
+                                diff_tensor = local_param - global_param
+                                d = diff_tensor.abs().flatten()
                                 sorted_idx = torch.argsort(d)
                                 percent = torch.zeros_like(d)
-                                percent[sorted_idx] = torch.linspace(0, 1, steps=len(d))
+                                percent[sorted_idx] = torch.linspace(0, 1, steps=len(d), device=d.device)
                                 alpha = percent.view_as(client_param_updates[i][key])
                                 alpha = torch.pow(alpha, 2)
 
-                                fused = (1-alpha) * local_param + alpha * global_param
+                                fused = alpha * local_param + (1-alpha) * global_param
                                 # print("use fused!!!!!!!!!!!!!!!!!!!!!!!")
                                 if client_masks[i] is not None and args.local_type==1 and key in client_masks[i]:
                                     # 只在 mask 为 0（全局参数）的位置更新
-                                    # client_state_dicts[i][key] = torch.where(
-                                    #     client_masks[i][key] == 0,
-                                    #     global_state_dict[key],
-                                    #     client_state_dicts[i][key]
-                                    #     # global_param,
-                                    #     # fused
-                                    # )
-                                    client_state_dicts[i][key] = fused
+                                    client_state_dicts[i][key] = torch.where(
+                                        client_masks[i][key] == 0,
+                                        # global_state_dict[key],
+                                        # client_state_dicts[i][key]
+                                        global_param,
+                                        fused
+                                    )
+                                    # client_state_dicts[i][key] = fused
                                     # 把fused换成local_param就是之前的
                                 else:
                                     # 如果没有 mask，直接使用聚合后的参数
