@@ -87,7 +87,6 @@ def evaluate(
     return metrics
 
 
-
 def train_personalized(
     model: nn.Module,
     ldr_train: torch.utils.data.DataLoader,
@@ -284,6 +283,7 @@ def fedselect_algorithm(
                 client_model.eval()
                 tp_amount = 0.0
                 fp_amount = 0.0
+                fn_amount = 0.0
 
                 with torch.no_grad():
                     for data, target in ldr_train:
@@ -293,22 +293,26 @@ def fedselect_algorithm(
 
                         tp_mask = (preds == 1) & (target == 1)
                         fp_mask = (preds == 1) & (target == 0)
+                        fn_mask = (preds == 0) & (target == 1)
 
                         if tp_mask.any() or fp_mask.any():
                             batch_amounts = data[:, -1]
                             tp_amount += batch_amounts[tp_mask].sum().item()
                             fp_amount += batch_amounts[fp_mask].sum().item()
+                            # fn_amount += batch_amounts[fn_mask].sum().item()
 
                 fraud_stats = get_client_fraud_stats(dataset_train, dict_users_train[i])
 
-                risk_ratio = tp_amount / (tp_amount + fp_amount + 1e-6)
+                precision = tp_amount / (tp_amount + fp_amount + 1e-6)
+                recall = tp_amount / (tp_amount + fn_amount + 1e-6)
+                # f1 = 2 * (precision*recall) / (precision+recall + 1e-6)
 
                 client_sample_nums[i] = fraud_stats['dataset_size']
                 
                 # 计算客户端准确率（这里简化，使用损失的倒数作为代理）
                 # 在实际应用中，应该在验证集上评估准确率
                 client_accuracies_dict[i] = 1.0 / (1.0 + loss)
-                client_risk_scores[i] = risk_ratio
+                client_risk_scores[i] = precision
 
                 # 计算风险分数
                 # risk_type = getattr(args, 'risk_type', 1)
@@ -528,10 +532,9 @@ def fedselect_algorithm(
                                 percent = torch.zeros_like(d)
                                 percent[sorted_idx] = torch.linspace(0, 1, steps=len(d), device=d.device)
                                 alpha = percent.view_as(client_param_updates[i][key])
-                                alpha = torch.pow(alpha, 2)
 
                                 fused = alpha * local_param + (1-alpha) * global_param
-                                # print("use fused!!!!!!!!!!!!!!!!!!!!!!!")
+
                                 if client_masks[i] is not None and args.local_type==1 and key in client_masks[i]:
                                     # 只在 mask 为 0（全局参数）的位置更新
                                     client_state_dicts[i][key] = torch.where(
